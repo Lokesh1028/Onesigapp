@@ -4,6 +4,7 @@ import { useState } from 'react'
 import EmailSignupForm from '@/components/EmailSignupForm'
 import FeatureCard from '@/components/FeatureCard'
 import FAQItem from '@/components/FAQItem'
+import InsightsDisplay from '@/components/InsightsDisplay'
 
 export default function Home() {
   const [subscriberCount] = useState(5) // Will be dynamic in Phase 2+
@@ -107,8 +108,33 @@ export default function Home() {
         </div>
       </section>
 
-      {/* What Makes Us Different */}
+      {/* Live Insights Section */}
       <section className="bg-gray-50">
+        <div className="section-container">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl sm:text-4xl font-bold mb-4">
+              Latest Insider Trades
+            </h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Real-time data from SEC Form 4 filings. See what company insiders are buying and selling right now.
+            </p>
+          </div>
+
+          <InsightsDisplay />
+
+          <div className="text-center mt-8">
+            <a href="#signup" className="btn-primary inline-flex items-center">
+              Get Weekly Insights in Your Inbox
+              <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* What Makes Us Different */}
+      <section className="bg-white">
         <div className="section-container">
           <h2 className="text-3xl sm:text-4xl font-bold text-center mb-12">
             Why OneSig?
