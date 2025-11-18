@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
 
 const navItems = [
@@ -12,31 +12,11 @@ const navItems = [
   { href: '/investments', label: 'My Investments' },
 ]
 
-// Client-only wrapper that safely uses usePathname
-function ClientNavigation() {
-  const pathname = usePathname()
-  
-  return (
-    <>
-      {navItems.map((item) => {
-        const isActive = pathname === item.href
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              isActive
-                ? 'bg-primary-100 text-primary-700'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-            }`}
-          >
-            {item.label}
-          </Link>
-        )
-      })}
-    </>
-  )
-}
+// Client-only component that uses usePathname - loaded only on client
+const ClientNavigation = dynamic(
+  () => import('./ClientNavigation'),
+  { ssr: false }
+)
 
 export default function Navigation() {
   const [mounted, setMounted] = useState(false)
