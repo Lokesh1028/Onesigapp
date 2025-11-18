@@ -2,9 +2,18 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
 export default function Navigation() {
   const pathname = usePathname()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // During SSR, pathname might be null, so we handle it gracefully
+  const currentPathname = mounted ? pathname : null
 
   const navItems = [
     { href: '/', label: 'Home' },
@@ -23,7 +32,7 @@ export default function Navigation() {
           </Link>
           <div className="flex items-center space-x-1 sm:space-x-4">
             {navItems.map((item) => {
-              const isActive = pathname === item.href
+              const isActive = currentPathname === item.href
               return (
                 <Link
                   key={item.href}
