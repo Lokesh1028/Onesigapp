@@ -5,6 +5,10 @@ import Navigation from '@/components/Navigation'
 import EmailSignupForm from '@/components/EmailSignupForm'
 import RetirementCalculator from '@/components/RetirementCalculator'
 
+// Prevent static generation - this page uses client-side hooks
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-gray-50">

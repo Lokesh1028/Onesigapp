@@ -1,5 +1,8 @@
 'use client'
 
+// Error pages should not be statically generated
+export const dynamic = 'force-dynamic'
+
 export default function Error({
   error,
   reset,

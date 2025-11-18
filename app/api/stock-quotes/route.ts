@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 // Mark this route as dynamic since it uses searchParams
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 interface StockQuote {
   symbol: string

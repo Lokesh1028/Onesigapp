@@ -3,6 +3,10 @@
 import Navigation from '@/components/Navigation'
 import RedditSentimentAnalyzer from '@/components/RedditSentimentAnalyzer'
 
+// Prevent static generation - this page uses client-side hooks
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default function RedditSentimentPage() {
   return (
     <main className="min-h-screen bg-gray-50">

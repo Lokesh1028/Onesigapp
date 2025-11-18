@@ -5,8 +5,8 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 export default function Navigation() {
-  const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
+  const pathname = usePathname()
 
   useEffect(() => {
     setMounted(true)
@@ -14,6 +14,25 @@ export default function Navigation() {
 
   // During SSR, pathname might be null, so we handle it gracefully
   const currentPathname = mounted ? pathname : null
+
+  // Don't render navigation during SSR to avoid useContext errors
+  if (!mounted) {
+    return (
+      <nav className="bg-white shadow-sm sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex justify-between items-center">
+            <Link href="/" className="text-2xl font-bold text-primary-600 hover:text-primary-700 transition-colors">
+              OneSig
+            </Link>
+            <div className="flex items-center space-x-1 sm:space-x-4">
+              {/* Placeholder during SSR */}
+              <div className="w-20 h-8 bg-gray-200 animate-pulse rounded"></div>
+            </div>
+          </div>
+        </div>
+      </nav>
+    )
+  }
 
   const navItems = [
     { href: '/', label: 'Home' },

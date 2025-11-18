@@ -6,6 +6,10 @@ import StockSelector from '@/components/StockSelector'
 import SelectedStocksDisplay from '@/components/SelectedStocksDisplay'
 import InvestorInsights from '@/components/InvestorInsights'
 
+// Prevent static generation - this page uses client-side hooks
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default function InvestmentsPage() {
   const [selectedStocks, setSelectedStocks] = useState<string[]>([])
 
