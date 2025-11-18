@@ -43,9 +43,6 @@ This guide will walk you through setting up the OneSig project from scratch, inc
   - Download: https://code.visualstudio.com/
   - Extensions: Python, ESLint, Tailwind CSS IntelliSense
 
-- **Google Sheets:** Data curation (Phase 1)
-  - Account: https://sheets.google.com
-
 - **Beehiiv Account:** Email newsletter service
   - Sign up: https://www.beehiiv.com/
 
@@ -333,7 +330,7 @@ deactivate
 
 ### Tuesday: Manual Review (60-90 min)
 
-1. Open CSV in Google Sheets or Excel
+1. Open CSV in Excel or any spreadsheet application
 2. Filter and rank trades
 3. Research top 15-20 trades
 4. Select final 10 for newsletter

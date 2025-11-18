@@ -7,6 +7,7 @@ interface EmailSignupFormProps {
 }
 
 export default function EmailSignupForm({ variant = 'light' }: EmailSignupFormProps) {
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
@@ -14,7 +15,13 @@ export default function EmailSignupForm({ variant = 'light' }: EmailSignupFormPr
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Basic email validation
+    // Basic validation
+    if (!name.trim()) {
+      setStatus('error')
+      setMessage('Please enter your name')
+      return
+    }
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
       setStatus('error')
@@ -23,25 +30,32 @@ export default function EmailSignupForm({ variant = 'light' }: EmailSignupFormPr
     }
 
     setStatus('loading')
+    setMessage('')
 
     try {
-      // Phase 1: For now, just show success message
-      // In Phase 2+, this will connect to Beehiiv API or backend
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Send subscription data to API endpoint
+      const response = await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, email }),
+      })
 
-      // For Phase 1, log the email (in production, send to Beehiiv)
-      console.log('New signup:', email)
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to subscribe')
+      }
 
       setStatus('success')
-      setMessage('🎉 Success! Check your inbox for confirmation.')
+      setMessage(data.message || 'Successfully subscribed! Check your inbox for confirmation.')
+      setName('')
       setEmail('')
-
-      // In production, redirect to Beehiiv or show confirmation
-      // window.location.href = 'https://your-beehiiv-signup-url.com'
     } catch (error) {
       setStatus('error')
-      setMessage('Oops! Something went wrong. Please try again.')
+      const errorMessage = error instanceof Error ? error.message : 'Oops! Something went wrong. Please try again.'
+      setMessage(errorMessage)
       console.error('Signup error:', error)
     }
   }
@@ -53,10 +67,23 @@ export default function EmailSignupForm({ variant = 'light' }: EmailSignupFormPr
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Your name"
+            className={`flex-1 px-4 py-3 rounded-lg border ${
+              isDark
+                ? 'bg-white text-gray-900 border-primary-300 placeholder:text-gray-500'
+                : 'bg-white text-gray-900 border-gray-300 placeholder:text-gray-400'
+            } focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent`}
+            required
+            disabled={status === 'loading' || status === 'success'}
+          />
+          <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Enter your email"
+            placeholder="Your email"
             className={`flex-1 px-4 py-3 rounded-lg border ${
               isDark
                 ? 'bg-white text-gray-900 border-primary-300 placeholder:text-gray-500'
@@ -68,7 +95,7 @@ export default function EmailSignupForm({ variant = 'light' }: EmailSignupFormPr
           <button
             type="submit"
             disabled={status === 'loading' || status === 'success'}
-            className={`px-8 py-3 rounded-lg font-semibold transition-all duration-200 ${
+            className={`px-8 py-3 rounded-lg font-semibold transition-all duration-200 whitespace-nowrap ${
               isDark
                 ? 'bg-white text-primary-600 hover:bg-gray-100'
                 : 'bg-primary-600 text-white hover:bg-primary-700'
@@ -87,7 +114,7 @@ export default function EmailSignupForm({ variant = 'light' }: EmailSignupFormPr
             ) : status === 'success' ? (
               '✓ Subscribed!'
             ) : (
-              'Subscribe Free'
+              'Subscribe'
             )}
           </button>
         </div>
@@ -105,27 +132,6 @@ export default function EmailSignupForm({ variant = 'light' }: EmailSignupFormPr
           </div>
         )}
       </form>
-
-      {/* Phase 1 Note: Manual Beehiiv signup */}
-      {status === 'success' && (
-        <div className={`mt-4 text-sm ${isDark ? 'text-primary-100' : 'text-gray-600'}`}>
-          <p className="font-semibold mb-2">What&apos;s next?</p>
-          <ol className="list-decimal list-inside space-y-1">
-            <li>Confirm your email (check spam folder)</li>
-            <li>Get your first newsletter on Thursday 9 AM EST</li>
-            <li>Reply with feedback - we read every email!</li>
-          </ol>
-        </div>
-      )}
-
-      {/* Privacy Notice */}
-      <p className={`mt-4 text-xs ${isDark ? 'text-primary-200' : 'text-gray-500'}`}>
-        By subscribing, you agree to receive weekly emails from OneSig.
-        We respect your privacy and will never share your email.{' '}
-        <a href="/legal/privacy-policy" className="underline hover:text-primary-600">
-          Privacy Policy
-        </a>
-      </p>
     </div>
   )
 }

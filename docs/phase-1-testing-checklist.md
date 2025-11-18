@@ -271,7 +271,7 @@ Test at breakpoints:
    - [ ] Can open and edit draft
 
 3. **Manual Curation:**
-   - [ ] Open CSV in spreadsheet application
+   - [ ] Open CSV in spreadsheet application (Excel, Numbers, or any CSV viewer)
    - [ ] Data is readable and organized
    - [ ] Can sort and filter trades
    - [ ] Can identify top 10 trades
@@ -381,7 +381,7 @@ Test at breakpoints:
    - [ ] CSV contains adequate trades (>20)
 
 2. **Tuesday - Manual Review:**
-   - [ ] Open CSV in Google Sheets
+   - [ ] Open CSV in spreadsheet application
    - [ ] Can identify top 10 trades
    - [ ] Can research trade context
 

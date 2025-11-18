@@ -53,7 +53,7 @@ Build a curated stock intelligence newsletter that provides actionable insider t
 - **Data Collection:** Python 3.11+ (SEC EDGAR API)
 - **Landing Page:** Next.js 14 (App Router) + Tailwind CSS
 - **Email:** Beehiiv (external service)
-- **Data Storage:** Google Sheets (temporary)
+- **Data Storage:** Supabase PostgreSQL
 - **Hosting:** Vercel (free tier)
 
 ### Phase 2+
@@ -143,7 +143,7 @@ This will:
 1. Pull last 7 days of SEC Form 4 filings
 2. Parse key fields (officer, ticker, shares, value)
 3. Rank trades by dollar value
-4. Export to CSV/Google Sheets
+4. Export to CSV for manual review
 
 ### Running the Landing Page
 

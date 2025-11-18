@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import CompanyLogo from '@/components/CompanyLogo'
 
 interface Insight {
   filing_date: string
@@ -19,9 +20,7 @@ interface Insight {
   is_derivative: boolean
 }
 
-interface ApiResponse {
-  success: boolean
-  timeframe: number
+interface TimeframeData {
   count: number
   summary: {
     total_trades: number
@@ -31,6 +30,16 @@ interface ApiResponse {
     total_sale_value: number
   }
   insights: Insight[]
+}
+
+interface AllTimeframesResponse {
+  success: boolean
+  timeframes: {
+    '1': TimeframeData
+    '7': TimeframeData
+    '30': TimeframeData
+  }
+  lastUpdated: string
   note?: string
 }
 
@@ -38,34 +47,97 @@ type Timeframe = 1 | 7 | 30
 
 export default function InsightsDisplay() {
   const [timeframe, setTimeframe] = useState<Timeframe>(7)
-  const [data, setData] = useState<ApiResponse | null>(null)
+  const [allData, setAllData] = useState<AllTimeframesResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [refreshCountdown, setRefreshCountdown] = useState<number | null>(null)
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
+  const updateRefreshCountdown = () => {
+    if (!lastUpdated) {
+      setRefreshCountdown(null)
+      return
+    }
+    const nextRefresh = new Date(lastUpdated.getTime() + 3600000) // +1 hour
+    const now = new Date()
+    const diffMs = nextRefresh.getTime() - now.getTime()
+    const diffMins = Math.ceil(diffMs / 60000)
+    setRefreshCountdown(diffMins > 0 ? diffMins : 0)
+  }
+
+  // Fetch all timeframes at once on mount and set up auto-refresh
   useEffect(() => {
-    fetchInsights()
-  }, [timeframe])
+    fetchAllInsights()
 
-  const fetchInsights = async () => {
-    setLoading(true)
+    // Set up automatic refresh every hour (3600000 ms)
+    refreshIntervalRef.current = setInterval(() => {
+      console.log('Auto-refreshing insights data...')
+      fetchAllInsights(true) // Silent refresh
+    }, 3600000) // 1 hour
+
+    // Set up countdown timer that updates every minute
+    countdownIntervalRef.current = setInterval(() => {
+      updateRefreshCountdown()
+    }, 60000) // Update every minute
+
+    // Cleanup intervals on unmount
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current)
+      }
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only run once on mount
+
+  // Update countdown when lastUpdated changes
+  useEffect(() => {
+    updateRefreshCountdown()
+  }, [lastUpdated])
+
+  const fetchAllInsights = async (silent = false) => {
+    if (!silent) {
+      setLoading(true)
+    }
     setError(null)
 
     try {
-      const response = await fetch(`/api/insights?timeframe=${timeframe}`)
+      const response = await fetch(`/api/insights?all=true`, {
+        cache: 'no-store' // Always check for fresh data
+      })
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`)
       }
 
-      const result: ApiResponse = await response.json()
-      setData(result)
+      const result: AllTimeframesResponse = await response.json()
+      setAllData(result)
+      setLastUpdated(new Date(result.lastUpdated))
+      
+      if (!silent) {
+        console.log('All timeframes loaded successfully')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch insights')
       console.error('Error fetching insights:', err)
     } finally {
-      setLoading(false)
+      if (!silent) {
+        setLoading(false)
+      }
     }
   }
+
+  // Get current timeframe data
+  const getCurrentData = (): TimeframeData | null => {
+    if (!allData) return null
+    return allData.timeframes[timeframe.toString() as '1' | '7' | '30']
+  }
+
+  const data = getCurrentData()
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -89,13 +161,40 @@ export default function InsightsDisplay() {
     }).format(date)
   }
 
+  const formatTimeAgo = (date: Date) => {
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours === 1) return '1h ago'
+    if (diffHours > 1) return `${diffHours}h ago`
+    return 'Just now'
+  }
+
+
   return (
     <div className="w-full">
       {/* Timeframe Filter Buttons */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-        <h3 className="text-xl sm:text-2xl font-bold text-gray-900">
-          Recent Insider Trades
-        </h3>
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
+            Stock Listings
+          </h2>
+          {lastUpdated && (
+            <p className="text-sm text-gray-500 mt-1">
+              Last updated: {formatTimeAgo(lastUpdated)}
+              {refreshCountdown !== null && refreshCountdown > 0 && (
+                <span className="ml-2">• Auto-refresh in {refreshCountdown}m</span>
+              )}
+              {refreshCountdown === 0 && (
+                <span className="ml-2 text-primary-600">• Refreshing...</span>
+              )}
+            </p>
+          )}
+        </div>
 
         <div className="flex gap-2">
           <button
@@ -135,7 +234,7 @@ export default function InsightsDisplay() {
       {data && !loading && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-            <div className="text-sm text-blue-600 font-medium mb-1">Total Trades</div>
+            <div className="text-sm text-blue-600 font-medium mb-1">Total</div>
             <div className="text-2xl font-bold text-blue-900">{data.summary.total_trades}</div>
           </div>
           <div className="bg-green-50 rounded-lg p-4 border border-green-200">
@@ -147,7 +246,7 @@ export default function InsightsDisplay() {
             <div className="text-2xl font-bold text-red-900">{data.summary.sales}</div>
           </div>
           <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-            <div className="text-sm text-purple-600 font-medium mb-1">Buy Volume</div>
+            <div className="text-sm text-purple-600 font-medium mb-1">Buy Value</div>
             <div className="text-lg font-bold text-purple-900">
               {formatCurrency(data.summary.total_buy_value)}
             </div>
@@ -174,7 +273,7 @@ export default function InsightsDisplay() {
           <p className="text-red-800 font-medium">Error loading insights</p>
           <p className="text-red-600 text-sm mt-1">{error}</p>
           <button
-            onClick={fetchInsights}
+            onClick={() => fetchAllInsights()}
             className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
           >
             Try Again
@@ -226,10 +325,16 @@ export default function InsightsDisplay() {
                       {formatDate(insight.filing_date)}
                     </td>
                     <td className="px-4 py-3 text-sm font-bold text-primary-600">
-                      {insight.ticker}
+                      <div className="flex items-center space-x-2">
+                        <CompanyLogo symbol={insight.ticker} companyName={insight.company_name} size="sm" />
+                        <span>{insight.ticker}</span>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900">
-                      {insight.company_name}
+                      <div className="flex items-center space-x-2">
+                        <CompanyLogo symbol={insight.ticker} companyName={insight.company_name} size="sm" />
+                        <span>{insight.company_name}</span>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900">
                       <div>{insight.officer_name}</div>
@@ -276,9 +381,12 @@ export default function InsightsDisplay() {
             {data.insights.map((insight, index) => (
               <div key={index} className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
                 <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <div className="text-lg font-bold text-primary-600">{insight.ticker}</div>
-                    <div className="text-sm text-gray-600">{insight.company_name}</div>
+                  <div className="flex items-start space-x-3 flex-1">
+                    <CompanyLogo symbol={insight.ticker} companyName={insight.company_name} size="lg" />
+                    <div>
+                      <div className="text-lg font-bold text-primary-600">{insight.ticker}</div>
+                      <div className="text-sm text-gray-600">{insight.company_name}</div>
+                    </div>
                   </div>
                   <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
                     insight.trade_type === 'Buy'
@@ -333,14 +441,6 @@ export default function InsightsDisplay() {
             ))}
           </div>
 
-          {/* Phase 1 Note */}
-          {data.note && (
-            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-800">
-                <span className="font-semibold">Note:</span> {data.note}
-              </p>
-            </div>
-          )}
         </>
       )}
     </div>
