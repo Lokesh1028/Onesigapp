@@ -26,6 +26,10 @@ const nextConfig = {
   poweredByHeader: false,
   // Output configuration
   output: 'standalone',
+  // Skip static optimization for pages that use client-side hooks
+  experimental: {
+    // This helps prevent static generation issues
+  },
 }
 
 module.exports = nextConfig

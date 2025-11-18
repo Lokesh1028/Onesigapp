@@ -4,43 +4,46 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
+const navItems = [
+  { href: '/', label: 'Home' },
+  { href: '/insider-trades', label: 'Insider Trades' },
+  { href: '/senate-trades', label: 'Senate Trades' },
+  { href: '/reddit-sentiment', label: 'Reddit Sentiment' },
+  { href: '/investments', label: 'My Investments' },
+]
+
+// Client-only wrapper that safely uses usePathname
+function ClientNavigation() {
+  const pathname = usePathname()
+  
+  return (
+    <>
+      {navItems.map((item) => {
+        const isActive = pathname === item.href
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              isActive
+                ? 'bg-primary-100 text-primary-700'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            {item.label}
+          </Link>
+        )
+      })}
+    </>
+  )
+}
+
 export default function Navigation() {
   const [mounted, setMounted] = useState(false)
-  const pathname = usePathname()
 
   useEffect(() => {
     setMounted(true)
   }, [])
-
-  // During SSR, pathname might be null, so we handle it gracefully
-  const currentPathname = mounted ? pathname : null
-
-  // Don't render navigation during SSR to avoid useContext errors
-  if (!mounted) {
-    return (
-      <nav className="bg-white shadow-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <Link href="/" className="text-2xl font-bold text-primary-600 hover:text-primary-700 transition-colors">
-              OneSig
-            </Link>
-            <div className="flex items-center space-x-1 sm:space-x-4">
-              {/* Placeholder during SSR */}
-              <div className="w-20 h-8 bg-gray-200 animate-pulse rounded"></div>
-            </div>
-          </div>
-        </div>
-      </nav>
-    )
-  }
-
-  const navItems = [
-    { href: '/', label: 'Home' },
-    { href: '/insider-trades', label: 'Insider Trades' },
-    { href: '/senate-trades', label: 'Senate Trades' },
-    { href: '/reddit-sentiment', label: 'Reddit Sentiment' },
-    { href: '/investments', label: 'My Investments' },
-  ]
 
   return (
     <nav className="bg-white shadow-sm sticky top-0 z-50">
@@ -50,22 +53,20 @@ export default function Navigation() {
             OneSig
           </Link>
           <div className="flex items-center space-x-1 sm:space-x-4">
-            {navItems.map((item) => {
-              const isActive = currentPathname === item.href
-              return (
+            {mounted ? (
+              <ClientNavigation />
+            ) : (
+              // Placeholder during SSR - no hooks called
+              navItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-primary-100 text-primary-700'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                  }`}
+                  className="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                 >
                   {item.label}
                 </Link>
-              )
-            })}
+              ))
+            )}
           </div>
         </div>
       </div>
