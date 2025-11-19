@@ -3,6 +3,9 @@
 import Navigation from '@/components/Navigation'
 import SenateTradesDisplay from '@/components/SenateTradesDisplay'
 
+// Prevent static generation - this page uses client-side hooks
+export const dynamic = 'force-dynamic'
+
 export default function SenateTradesPage() {
   return (
     <main className="min-h-screen bg-gray-50">

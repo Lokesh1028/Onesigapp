@@ -1,18 +1,45 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
+
+const navItems = [
+  { href: '/', label: 'Home' },
+  { href: '/insider-trades', label: 'Insider Trades' },
+  { href: '/senate-trades', label: 'Senate Trades' },
+  { href: '/reddit-sentiment', label: 'Reddit Wall Street' },
+]
 
 export default function Navigation() {
-  const pathname = usePathname()
+  const [currentPath, setCurrentPath] = useState('')
 
-  const navItems = [
-    { href: '/', label: 'Home' },
-    { href: '/insider-trades', label: 'Insider Trades' },
-    { href: '/senate-trades', label: 'Senate Trades' },
-    { href: '/reddit-sentiment', label: 'Reddit Sentiment' },
-    { href: '/investments', label: 'My Investments' },
-  ]
+  useEffect(() => {
+    // Only run on client side
+    if (typeof window !== 'undefined') {
+      setCurrentPath(window.location.pathname)
+      
+      // Listen for route changes
+      const handleRouteChange = () => {
+        setCurrentPath(window.location.pathname)
+      }
+      
+      window.addEventListener('popstate', handleRouteChange)
+      
+      // Also listen for Next.js route changes
+      const observer = new MutationObserver(() => {
+        if (window.location.pathname !== currentPath) {
+          setCurrentPath(window.location.pathname)
+        }
+      })
+      
+      observer.observe(document.body, { childList: true, subtree: true })
+      
+      return () => {
+        window.removeEventListener('popstate', handleRouteChange)
+        observer.disconnect()
+      }
+    }
+  }, [currentPath])
 
   return (
     <nav className="bg-white shadow-sm sticky top-0 z-50">
@@ -23,11 +50,12 @@ export default function Navigation() {
           </Link>
           <div className="flex items-center space-x-1 sm:space-x-4">
             {navItems.map((item) => {
-              const isActive = pathname === item.href
+              const isActive = currentPath === item.href
               return (
                 <Link
                   key={item.href}
                   href={item.href}
+                  onClick={() => setCurrentPath(item.href)}
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                     isActive
                       ? 'bg-primary-100 text-primary-700'

@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// Mark this route as dynamic since it uses searchParams
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // Type definitions matching the Python scraper output
 interface InsightData {
   filing_date: string

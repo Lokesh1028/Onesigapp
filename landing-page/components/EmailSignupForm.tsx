@@ -9,6 +9,7 @@ interface EmailSignupFormProps {
 export default function EmailSignupForm({ variant = 'light' }: EmailSignupFormProps) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [whatsapp, setWhatsapp] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
 
@@ -29,6 +30,13 @@ export default function EmailSignupForm({ variant = 'light' }: EmailSignupFormPr
       return
     }
 
+    // Optional WhatsApp validation (if provided)
+    if (whatsapp.trim() && !/^\+?[1-9]\d{1,14}$/.test(whatsapp.replace(/[\s-]/g, ''))) {
+      setStatus('error')
+      setMessage('Please enter a valid WhatsApp number with country code (e.g., +1234567890)')
+      return
+    }
+
     setStatus('loading')
     setMessage('')
 
@@ -39,7 +47,7 @@ export default function EmailSignupForm({ variant = 'light' }: EmailSignupFormPr
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, email }),
+        body: JSON.stringify({ name, email, whatsapp: whatsapp.trim() || undefined }),
       })
 
       const data = await response.json()
@@ -52,6 +60,7 @@ export default function EmailSignupForm({ variant = 'light' }: EmailSignupFormPr
       setMessage(data.message || 'Successfully subscribed! Check your inbox for confirmation.')
       setName('')
       setEmail('')
+      setWhatsapp('')
     } catch (error) {
       setStatus('error')
       const errorMessage = error instanceof Error ? error.message : 'Oops! Something went wrong. Please try again.'
@@ -65,13 +74,13 @@ export default function EmailSignupForm({ variant = 'light' }: EmailSignupFormPr
   return (
     <div className="w-full">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col gap-3">
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Your name"
-            className={`flex-1 px-4 py-3 rounded-lg border ${
+            className={`w-full px-4 py-3 rounded-lg border ${
               isDark
                 ? 'bg-white text-gray-900 border-primary-300 placeholder:text-gray-500'
                 : 'bg-white text-gray-900 border-gray-300 placeholder:text-gray-400'
@@ -84,7 +93,7 @@ export default function EmailSignupForm({ variant = 'light' }: EmailSignupFormPr
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Your email"
-            className={`flex-1 px-4 py-3 rounded-lg border ${
+            className={`w-full px-4 py-3 rounded-lg border ${
               isDark
                 ? 'bg-white text-gray-900 border-primary-300 placeholder:text-gray-500'
                 : 'bg-white text-gray-900 border-gray-300 placeholder:text-gray-400'
@@ -92,10 +101,22 @@ export default function EmailSignupForm({ variant = 'light' }: EmailSignupFormPr
             required
             disabled={status === 'loading' || status === 'success'}
           />
+          <input
+            type="tel"
+            value={whatsapp}
+            onChange={(e) => setWhatsapp(e.target.value)}
+            placeholder="WhatsApp number "
+            className={`w-full px-4 py-3 rounded-lg border ${
+              isDark
+                ? 'bg-white text-gray-900 border-primary-300 placeholder:text-gray-500'
+                : 'bg-white text-gray-900 border-gray-300 placeholder:text-gray-400'
+            } focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent`}
+            disabled={status === 'loading' || status === 'success'}
+          />
           <button
             type="submit"
             disabled={status === 'loading' || status === 'success'}
-            className={`px-8 py-3 rounded-lg font-semibold transition-all duration-200 whitespace-nowrap ${
+            className={`w-full px-8 py-3 rounded-lg font-semibold transition-all duration-200 ${
               isDark
                 ? 'bg-white text-primary-600 hover:bg-gray-100'
                 : 'bg-primary-600 text-white hover:bg-primary-700'

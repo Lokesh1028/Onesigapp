@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// Force dynamic rendering for API routes
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // Cache for AInvest data (in-memory cache, resets on server restart)
 let cachedCongressTrades: { trades: AInvestCongressTrade[], ticker: string }[] | null = null
 let cacheTimestamp: number | null = null
