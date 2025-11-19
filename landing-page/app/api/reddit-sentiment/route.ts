@@ -310,9 +310,9 @@ Respond with ONLY the JSON object, nothing else.`
       sentiment_score: typeof parsedResponse.sentiment_score === 'number' ? parsedResponse.sentiment_score : parseFloat(parsedResponse.sentiment_score) || 0,
       confidence: typeof parsedResponse.confidence === 'number' ? parsedResponse.confidence : parseFloat(parsedResponse.confidence) || 0.5,
       summary: parsedResponse.summary || 'Unable to analyze sentiment.',
-      key_themes: Array.isArray(parsedResponse.key_themes) ? parsedResponse.key_themes.filter(t => t) : [],
-      positive_aspects: Array.isArray(parsedResponse.positive_aspects) ? parsedResponse.positive_aspects.filter(a => a) : [],
-      negative_aspects: Array.isArray(parsedResponse.negative_aspects) ? parsedResponse.negative_aspects.filter(a => a) : [],
+      key_themes: Array.isArray(parsedResponse.key_themes) ? parsedResponse.key_themes.filter((t: any) => t) : [],
+      positive_aspects: Array.isArray(parsedResponse.positive_aspects) ? parsedResponse.positive_aspects.filter((a: any) => a) : [],
+      negative_aspects: Array.isArray(parsedResponse.negative_aspects) ? parsedResponse.negative_aspects.filter((a: any) => a) : [],
       sample_posts: Array.isArray(parsedResponse.sample_posts) && parsedResponse.sample_posts.length > 0
         ? parsedResponse.sample_posts.slice(0, 5).map(p => ({
             title: p.title || 'Untitled',
