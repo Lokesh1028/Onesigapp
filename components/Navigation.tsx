@@ -7,8 +7,7 @@ const navItems = [
   { href: '/', label: 'Home' },
   { href: '/insider-trades', label: 'Insider Trades' },
   { href: '/senate-trades', label: 'Senate Trades' },
-  // { href: '/reddit-sentiment', label: 'Reddit Sentiment' },
-  // { href: '/investments', label: 'My Investments' },
+  { href: '/reddit-sentiment', label: 'Reddit Wall Street' },
 ]
 
 export default function Navigation() {

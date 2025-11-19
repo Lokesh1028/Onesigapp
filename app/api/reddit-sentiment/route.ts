@@ -36,10 +36,26 @@ interface SentimentResult {
     sentiment: 'positive' | 'negative' | 'neutral'
     score: number
   }>
+  positive_stocks: Array<{
+    ticker: string
+    company_name: string
+    sentiment_score: number
+    prediction: 'increase' | 'decrease' | 'neutral'
+    confidence: number
+    reasons: string[]
+  }>
+  negative_stocks: Array<{
+    ticker: string
+    company_name: string
+    sentiment_score: number
+    prediction: 'increase' | 'decrease' | 'neutral'
+    confidence: number
+    reasons: string[]
+  }>
 }
 
 // Fetch Reddit posts from a subreddit
-async function fetchRedditPosts(subreddit: string, limit: number = 25): Promise<RedditPost[]> {
+async function fetchRedditPosts(subreddit: string, limit: number = 100): Promise<RedditPost[]> {
   try {
     // Remove 'r/' prefix if present
     const cleanSubreddit = subreddit.replace(/^r\//, '').trim()
@@ -152,8 +168,8 @@ async function analyzeSentimentWithGroq(
     })
 
     // Prepare content for analysis (limit to avoid token limits)
-    const topPosts = posts.slice(0, 15)
-    const topComments = comments.slice(0, 30)
+    const topPosts = posts.slice(0, 50)
+    const topComments = comments.slice(0, 50)
     
     const postsText = topPosts
       .map((post, idx) => `Post ${idx + 1}: "${post.title}" - ${post.selftext.substring(0, 200)}`)
@@ -163,7 +179,7 @@ async function analyzeSentimentWithGroq(
       .map((comment, idx) => `Comment ${idx + 1}: "${comment.body.substring(0, 150)}"`)
       .join('\n\n')
 
-    const prompt = `Analyze the sentiment of Reddit posts and comments from a subreddit. 
+    const prompt = `Analyze the sentiment of the following Reddit posts and comments from r/wallstreetbets.
 
 POSTS:
 ${postsText}
@@ -171,101 +187,171 @@ ${postsText}
 COMMENTS:
 ${commentsText}
 
-Perform a comprehensive sentiment analysis and provide:
-1. Overall sentiment (positive, negative, or neutral)
-2. Sentiment score (-1 to 1, where -1 is very negative, 0 is neutral, 1 is very positive)
-3. Confidence level (0 to 1)
-4. A brief summary (2-3 sentences) of the general sentiment
-5. Key themes/topics discussed
-6. Positive aspects mentioned
-7. Negative aspects mentioned
-8. Sample posts with their individual sentiment classifications
+Provide a comprehensive sentiment analysis including stock-specific insights. You must respond with ONLY valid JSON, no other text before or after.
 
-Format your response as JSON with this exact structure:
+JSON structure (use this exact format):
 {
-  "overall_sentiment": "positive|negative|neutral",
-  "sentiment_score": -1.0 to 1.0,
-  "confidence": 0.0 to 1.0,
-  "summary": "brief summary text",
+  "overall_sentiment": "positive" or "negative" or "neutral",
+  "sentiment_score": number between -1.0 and 1.0,
+  "confidence": number between 0.0 and 1.0,
+  "summary": "2-3 sentence summary of the general sentiment",
   "key_themes": ["theme1", "theme2", "theme3"],
   "positive_aspects": ["aspect1", "aspect2"],
   "negative_aspects": ["aspect1", "aspect2"],
   "sample_posts": [
+    {"title": "post title", "sentiment": "positive", "score": 0.5}
+  ],
+  "positive_stocks": [
     {
-      "title": "post title",
-      "sentiment": "positive|negative|neutral",
-      "score": sentiment_score
+      "ticker": "AAPL",
+      "company_name": "Apple Inc",
+      "sentiment_score": 0.8,
+      "prediction": "increase",
+      "confidence": 0.7,
+      "reasons": ["Strong earnings", "New product launch"]
+    }
+  ],
+  "negative_stocks": [
+    {
+      "ticker": "TSLA",
+      "company_name": "Tesla Inc",
+      "sentiment_score": -0.6,
+      "prediction": "decrease",
+      "confidence": 0.65,
+      "reasons": ["Concerns about deliveries", "CEO controversies"]
     }
   ]
-}`
+}
+
+For stocks:
+- Extract all stock tickers mentioned (e.g., TSLA, AAPL, NVDA, SPY, etc.)
+- Determine sentiment score (-1.0 to 1.0) based on the overall tone
+- For prediction, ALIGN with the sentiment score:
+  * If sentiment_score > 0.3: predict "increase" (bullish stocks should predict increase)
+  * If sentiment_score < -0.3: predict "decrease" (bearish stocks should predict decrease)
+  * If sentiment_score between -0.3 and 0.3: predict "neutral"
+  * DO NOT predict "decrease" for stocks with positive sentiment scores
+  * DO NOT predict "increase" for stocks with negative sentiment scores
+- Confidence should reflect how strong the sentiment is:
+  * Strong sentiment (score > 0.6 or < -0.6): confidence 0.7-0.8
+  * Moderate sentiment (score 0.3-0.6 or -0.3 to -0.6): confidence 0.5-0.7
+  * Weak sentiment (score -0.3 to 0.3): confidence 0.3-0.5
+- List key reasons for the sentiment
+- Include up to 10 stocks in each category
+- Positive_stocks array should contain stocks with POSITIVE sentiment and "increase" predictions
+- Negative_stocks array should contain stocks with NEGATIVE sentiment and "decrease" predictions
+
+Respond with ONLY the JSON object, nothing else.`
 
     const completion = await groq.chat.completions.create({
       messages: [
         {
           role: 'system',
-          content: 'You are an expert sentiment analysis AI. Analyze Reddit content and provide accurate, detailed sentiment analysis.',
+          content: 'You are an expert financial sentiment analyst. Analyze Reddit content and ensure predictions ALIGN with sentiment scores: positive sentiment → increase prediction, negative sentiment → decrease prediction. Always respond with valid JSON only, no markdown formatting or additional text.',
         },
         {
           role: 'user',
           content: prompt,
         },
       ],
-      model: 'llama-3.3-70b-versatile', // Can also use 'openai/gpt-oss-120b' or 'llama-3.3-70b-versatile'
-      temperature: 0.3,
-      max_tokens: 2000,
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.2,
+      max_tokens: 2500,
+      response_format: { type: 'json_object' },
     })
 
     const responseText = completion.choices[0]?.message?.content || ''
 
     // Parse JSON from response
-    let jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) || 
-                    responseText.match(/```\s*([\s\S]*?)\s*```/) ||
-                    [null, responseText]
-    
     let parsedResponse
     try {
-      const jsonText = jsonMatch[1] || jsonMatch[0] || responseText
-      parsedResponse = JSON.parse(jsonText)
-    } catch (parseError) {
-      console.error('Failed to parse JSON response:', parseError)
-      console.error('Response text:', responseText.substring(0, 500))
-      // Try to extract basic sentiment from text if JSON parsing fails
-      const sentimentMatch = responseText.match(/overall_sentiment["\s:]+(\w+)/i)
-      const scoreMatch = responseText.match(/sentiment_score["\s:]+([-+]?\d*\.?\d+)/i)
+      // Try direct parse first (response_format: json_object should give us clean JSON)
+      parsedResponse = JSON.parse(responseText)
+    } catch (directParseError) {
+      // Fallback: try to extract JSON from markdown code blocks
+      console.warn('Direct JSON parse failed, trying to extract from markdown:', directParseError)
+      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
       
-      if (sentimentMatch || scoreMatch) {
-        parsedResponse = {
-          overall_sentiment: sentimentMatch ? sentimentMatch[1].toLowerCase() : 'neutral',
-          sentiment_score: scoreMatch ? parseFloat(scoreMatch[1]) : 0,
-          confidence: 0.5,
-          summary: 'Sentiment analysis completed but response format was unexpected.',
-          key_themes: [],
-          positive_aspects: [],
-          negative_aspects: [],
-          sample_posts: [],
+      if (jsonMatch && jsonMatch[1]) {
+        try {
+          parsedResponse = JSON.parse(jsonMatch[1])
+        } catch (markdownParseError) {
+          console.error('Failed to parse JSON from markdown block:', markdownParseError)
+          throw new Error(`Failed to parse AI response as JSON. Response snippet: ${responseText.substring(0, 200)}`)
         }
       } else {
-        throw new Error(`Failed to parse sentiment analysis response. AI response: ${responseText.substring(0, 200)}`)
+        // Last resort: try to extract values with regex
+        console.error('No JSON block found in response:', responseText.substring(0, 500))
+        const sentimentMatch = responseText.match(/["']?overall_sentiment["']?\s*:\s*["']?(\w+)["']?/i)
+        const scoreMatch = responseText.match(/["']?sentiment_score["']?\s*:\s*([-+]?\d*\.?\d+)/i)
+        const confidenceMatch = responseText.match(/["']?confidence["']?\s*:\s*(\d*\.?\d+)/i)
+        
+        if (sentimentMatch) {
+          parsedResponse = {
+            overall_sentiment: sentimentMatch[1].toLowerCase(),
+            sentiment_score: scoreMatch ? parseFloat(scoreMatch[1]) : 0,
+            confidence: confidenceMatch ? parseFloat(confidenceMatch[1]) : 0.5,
+            summary: 'Sentiment analysis completed (partial data extracted from malformed response).',
+            key_themes: [],
+            positive_aspects: [],
+            negative_aspects: [],
+            sample_posts: [],
+          }
+          console.warn('Used fallback parsing, results may be incomplete')
+        } else {
+          throw new Error(`Could not extract sentiment data from AI response. Response: ${responseText.substring(0, 300)}`)
+        }
       }
     }
 
     // Validate and structure the response
     const result: SentimentResult = {
-      overall_sentiment: parsedResponse.overall_sentiment || 'neutral',
-      sentiment_score: parseFloat(parsedResponse.sentiment_score) || 0,
-      confidence: parseFloat(parsedResponse.confidence) || 0.5,
+      overall_sentiment: (parsedResponse.overall_sentiment || 'neutral').toLowerCase() as 'positive' | 'negative' | 'neutral',
+      sentiment_score: typeof parsedResponse.sentiment_score === 'number' ? parsedResponse.sentiment_score : parseFloat(parsedResponse.sentiment_score) || 0,
+      confidence: typeof parsedResponse.confidence === 'number' ? parsedResponse.confidence : parseFloat(parsedResponse.confidence) || 0.5,
       summary: parsedResponse.summary || 'Unable to analyze sentiment.',
-      key_themes: Array.isArray(parsedResponse.key_themes) ? parsedResponse.key_themes : [],
-      positive_aspects: Array.isArray(parsedResponse.positive_aspects) ? parsedResponse.positive_aspects : [],
-      negative_aspects: Array.isArray(parsedResponse.negative_aspects) ? parsedResponse.negative_aspects : [],
-      sample_posts: Array.isArray(parsedResponse.sample_posts) 
-        ? parsedResponse.sample_posts.slice(0, 5)
+      key_themes: Array.isArray(parsedResponse.key_themes) ? parsedResponse.key_themes.filter((t: any) => t) : [],
+      positive_aspects: Array.isArray(parsedResponse.positive_aspects) ? parsedResponse.positive_aspects.filter((a: any) => a) : [],
+      negative_aspects: Array.isArray(parsedResponse.negative_aspects) ? parsedResponse.negative_aspects.filter((a: any) => a) : [],
+      sample_posts: Array.isArray(parsedResponse.sample_posts) && parsedResponse.sample_posts.length > 0
+        ? parsedResponse.sample_posts.slice(0, 5).map((p: any) => ({
+            title: p.title || 'Untitled',
+            sentiment: (p.sentiment || 'neutral').toLowerCase() as 'positive' | 'negative' | 'neutral',
+            score: typeof p.score === 'number' ? p.score : 0,
+          }))
         : topPosts.slice(0, 5).map(post => ({
             title: post.title,
             sentiment: 'neutral' as const,
             score: 0,
           })),
+      positive_stocks: Array.isArray(parsedResponse.positive_stocks) 
+        ? parsedResponse.positive_stocks.slice(0, 10).map((s: any) => ({
+            ticker: (s.ticker || '').toUpperCase(),
+            company_name: s.company_name || '',
+            sentiment_score: typeof s.sentiment_score === 'number' ? s.sentiment_score : parseFloat(s.sentiment_score) || 0,
+            prediction: (s.prediction || 'neutral').toLowerCase() as 'increase' | 'decrease' | 'neutral',
+            confidence: typeof s.confidence === 'number' ? s.confidence : parseFloat(s.confidence) || 0.5,
+            reasons: Array.isArray(s.reasons) ? s.reasons.filter((r: any) => r) : [],
+          }))
+        : [],
+      negative_stocks: Array.isArray(parsedResponse.negative_stocks)
+        ? parsedResponse.negative_stocks.slice(0, 10).map((s: any) => ({
+            ticker: (s.ticker || '').toUpperCase(),
+            company_name: s.company_name || '',
+            sentiment_score: typeof s.sentiment_score === 'number' ? s.sentiment_score : parseFloat(s.sentiment_score) || 0,
+            prediction: (s.prediction || 'neutral').toLowerCase() as 'increase' | 'decrease' | 'neutral',
+            confidence: typeof s.confidence === 'number' ? s.confidence : parseFloat(s.confidence) || 0.5,
+            reasons: Array.isArray(s.reasons) ? s.reasons.filter((r: any) => r) : [],
+          }))
+        : [],
     }
+
+    console.log('[Reddit Sentiment] Successfully parsed sentiment result:', {
+      sentiment: result.overall_sentiment,
+      score: result.sentiment_score,
+      confidence: result.confidence,
+      themes_count: result.key_themes.length,
+    })
 
     return result
   } catch (error) {
@@ -291,7 +377,7 @@ export async function POST(request: NextRequest) {
     // Fetch Reddit posts
     let posts: RedditPost[]
     try {
-      posts = await fetchRedditPosts(subreddit, 25)
+      posts = await fetchRedditPosts(subreddit, 100)
       console.log(`[Reddit Sentiment] Fetched ${posts.length} posts`)
     } catch (redditError) {
       const errorMsg = redditError instanceof Error ? redditError.message : 'Failed to fetch Reddit posts'
@@ -356,7 +442,7 @@ export async function POST(request: NextRequest) {
       posts_analyzed: posts.length,
       comments_analyzed: comments.length,
       sentiment: sentimentResult,
-      posts: posts.slice(0, 10).map(post => ({
+      posts: posts.slice(0, 20).map(post => ({
         title: post.title,
         score: post.score,
         num_comments: post.num_comments,
