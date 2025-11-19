@@ -325,23 +325,23 @@ Respond with ONLY the JSON object, nothing else.`
             score: 0,
           })),
       positive_stocks: Array.isArray(parsedResponse.positive_stocks) 
-        ? parsedResponse.positive_stocks.slice(0, 10).map(s => ({
+        ? parsedResponse.positive_stocks.slice(0, 10).map((s: any) => ({
             ticker: (s.ticker || '').toUpperCase(),
             company_name: s.company_name || '',
             sentiment_score: typeof s.sentiment_score === 'number' ? s.sentiment_score : parseFloat(s.sentiment_score) || 0,
             prediction: (s.prediction || 'neutral').toLowerCase() as 'increase' | 'decrease' | 'neutral',
             confidence: typeof s.confidence === 'number' ? s.confidence : parseFloat(s.confidence) || 0.5,
-            reasons: Array.isArray(s.reasons) ? s.reasons.filter(r => r) : [],
+            reasons: Array.isArray(s.reasons) ? s.reasons.filter((r: any) => r) : [],
           }))
         : [],
       negative_stocks: Array.isArray(parsedResponse.negative_stocks)
-        ? parsedResponse.negative_stocks.slice(0, 10).map(s => ({
+        ? parsedResponse.negative_stocks.slice(0, 10).map((s: any) => ({
             ticker: (s.ticker || '').toUpperCase(),
             company_name: s.company_name || '',
             sentiment_score: typeof s.sentiment_score === 'number' ? s.sentiment_score : parseFloat(s.sentiment_score) || 0,
             prediction: (s.prediction || 'neutral').toLowerCase() as 'increase' | 'decrease' | 'neutral',
             confidence: typeof s.confidence === 'number' ? s.confidence : parseFloat(s.confidence) || 0.5,
-            reasons: Array.isArray(s.reasons) ? s.reasons.filter(r => r) : [],
+            reasons: Array.isArray(s.reasons) ? s.reasons.filter((r: any) => r) : [],
           }))
         : [],
     }
