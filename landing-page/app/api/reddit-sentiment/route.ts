@@ -314,7 +314,7 @@ Respond with ONLY the JSON object, nothing else.`
       positive_aspects: Array.isArray(parsedResponse.positive_aspects) ? parsedResponse.positive_aspects.filter((a: any) => a) : [],
       negative_aspects: Array.isArray(parsedResponse.negative_aspects) ? parsedResponse.negative_aspects.filter((a: any) => a) : [],
       sample_posts: Array.isArray(parsedResponse.sample_posts) && parsedResponse.sample_posts.length > 0
-        ? parsedResponse.sample_posts.slice(0, 5).map(p => ({
+        ? parsedResponse.sample_posts.slice(0, 5).map((p: any) => ({
             title: p.title || 'Untitled',
             sentiment: (p.sentiment || 'neutral').toLowerCase() as 'positive' | 'negative' | 'neutral',
             score: typeof p.score === 'number' ? p.score : 0,
