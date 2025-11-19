@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Groq from 'groq-sdk'
 
+// Mark this route as dynamic
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 interface RedditPost {
   title: string
   selftext: string
