@@ -7,7 +7,6 @@ import RetirementCalculator from '@/components/RetirementCalculator'
 
 // Prevent static generation - this page uses client-side hooks
 export const dynamic = 'force-dynamic'
-export const revalidate = 0
 
 export default function Home() {
   return (

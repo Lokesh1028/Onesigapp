@@ -5,7 +5,6 @@ import SenateTradesDisplay from '@/components/SenateTradesDisplay'
 
 // Prevent static generation - this page uses client-side hooks
 export const dynamic = 'force-dynamic'
-export const revalidate = 0
 
 export default function SenateTradesPage() {
   return (

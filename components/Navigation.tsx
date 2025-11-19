@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
 
 const navItems = [
@@ -12,18 +11,36 @@ const navItems = [
   { href: '/investments', label: 'My Investments' },
 ]
 
-// Client-only component that uses usePathname - loaded only on client
-const ClientNavigation = dynamic(
-  () => import('./ClientNavigation'),
-  { ssr: false }
-)
-
 export default function Navigation() {
-  const [mounted, setMounted] = useState(false)
+  const [currentPath, setCurrentPath] = useState('')
 
   useEffect(() => {
-    setMounted(true)
-  }, [])
+    // Only run on client side
+    if (typeof window !== 'undefined') {
+      setCurrentPath(window.location.pathname)
+      
+      // Listen for route changes
+      const handleRouteChange = () => {
+        setCurrentPath(window.location.pathname)
+      }
+      
+      window.addEventListener('popstate', handleRouteChange)
+      
+      // Also listen for Next.js route changes
+      const observer = new MutationObserver(() => {
+        if (window.location.pathname !== currentPath) {
+          setCurrentPath(window.location.pathname)
+        }
+      })
+      
+      observer.observe(document.body, { childList: true, subtree: true })
+      
+      return () => {
+        window.removeEventListener('popstate', handleRouteChange)
+        observer.disconnect()
+      }
+    }
+  }, [currentPath])
 
   return (
     <nav className="bg-white shadow-sm sticky top-0 z-50">
@@ -33,20 +50,23 @@ export default function Navigation() {
             OneSig
           </Link>
           <div className="flex items-center space-x-1 sm:space-x-4">
-            {mounted ? (
-              <ClientNavigation />
-            ) : (
-              // Placeholder during SSR - no hooks called
-              navItems.map((item) => (
+            {navItems.map((item) => {
+              const isActive = currentPath === item.href
+              return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                  onClick={() => setCurrentPath(item.href)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-primary-100 text-primary-700'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
                 >
                   {item.label}
                 </Link>
-              ))
-            )}
+              )
+            })}
           </div>
         </div>
       </div>

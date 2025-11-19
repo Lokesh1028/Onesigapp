@@ -5,7 +5,6 @@ import InsightsDisplay from '@/components/InsightsDisplay'
 
 // Prevent static generation - this page uses client-side hooks
 export const dynamic = 'force-dynamic'
-export const revalidate = 0
 
 export default function InsiderTradesPage() {
   return (
