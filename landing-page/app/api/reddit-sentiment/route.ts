@@ -64,48 +64,77 @@ async function fetchRedditPosts(subreddit: string, limit: number = 100): Promise
       throw new Error('Invalid subreddit name')
     }
 
-    // Use Reddit's public JSON API (no auth needed for public subreddits)
-    const url = `https://www.reddit.com/r/${cleanSubreddit}/hot.json?limit=${limit}`
-    
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; OneSig/1.0; +https://onesig.com)',
-        'Accept': 'application/json',
-      },
-      // Remove next: { revalidate } as it might cause issues in API routes
-    })
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'application/json',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+    }
 
-    if (!response.ok) {
-      if (response.status === 404) {
+    // Try multiple Reddit endpoints as fallbacks
+    const urls = [
+      `https://www.reddit.com/r/${cleanSubreddit}/hot.json?limit=${limit}`,
+      `https://old.reddit.com/r/${cleanSubreddit}/hot.json?limit=${limit}`,
+      `https://api.reddit.com/r/${cleanSubreddit}/hot?limit=${limit}`,
+    ]
+
+    let lastError: Error | null = null
+    
+    for (const url of urls) {
+      try {
+        console.log(`[Reddit API] Trying ${url}`)
+        const response = await fetch(url, {
+          headers,
+          cache: 'no-store',
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          
+          if (!data.data || !data.data.children) {
+            console.warn(`[Reddit API] Invalid response structure from ${url}`)
+            continue
+          }
+
+          const posts: RedditPost[] = data.data.children
+            .map((child: any) => child.data)
+            .filter((post: any) => post.title && post.selftext !== '[removed]' && post.selftext !== '[deleted]')
+            .map((post: any) => ({
+              title: post.title,
+              selftext: post.selftext || '',
+              score: post.score || 0,
+              num_comments: post.num_comments || 0,
+              created_utc: post.created_utc,
+              author: post.author,
+              url: post.url,
+              permalink: `https://reddit.com${post.permalink}`,
+            }))
+
+          console.log(`[Reddit API] Successfully fetched ${posts.length} posts from ${url}`)
+          return posts
+        }
+
+        lastError = new Error(`HTTP ${response.status} from ${url}`)
+      } catch (error) {
+        console.warn(`[Reddit API] Failed to fetch from ${url}:`, error)
+        lastError = error instanceof Error ? error : new Error(String(error))
+      }
+    }
+
+    // If all URLs failed
+    if (lastError) {
+      if (lastError.message.includes('404')) {
         throw new Error(`Subreddit "r/${cleanSubreddit}" not found or is private`)
       }
-      if (response.status === 403) {
-        throw new Error(`Subreddit "r/${cleanSubreddit}" is private or banned`)
+      if (lastError.message.includes('403')) {
+        throw new Error(`Access to subreddit "r/${cleanSubreddit}" is blocked. Reddit may be blocking server requests.`)
       }
-      throw new Error(`Reddit API error: ${response.status}`)
+      throw new Error(`Failed to fetch Reddit data after trying multiple endpoints: ${lastError.message}`)
     }
 
-    const data = await response.json()
-    
-    if (!data.data || !data.data.children) {
-      throw new Error('Invalid Reddit API response')
-    }
-
-    const posts: RedditPost[] = data.data.children
-      .map((child: any) => child.data)
-      .filter((post: any) => post.title && post.selftext !== '[removed]' && post.selftext !== '[deleted]')
-      .map((post: any) => ({
-        title: post.title,
-        selftext: post.selftext || '',
-        score: post.score || 0,
-        num_comments: post.num_comments || 0,
-        created_utc: post.created_utc,
-        author: post.author,
-        url: post.url,
-        permalink: `https://reddit.com${post.permalink}`,
-      }))
-
-    return posts
+    throw new Error('Failed to fetch Reddit data from any endpoint')
   } catch (error) {
     console.error('Error fetching Reddit posts:', error)
     throw error
@@ -119,9 +148,14 @@ async function fetchPostComments(permalink: string, limit: number = 10): Promise
     
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; OneSig/1.0; +https://onesig.com)',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
       },
+      cache: 'no-store',
     })
 
     if (!response.ok) {
