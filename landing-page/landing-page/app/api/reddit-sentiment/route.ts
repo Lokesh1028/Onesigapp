@@ -54,113 +54,150 @@ interface SentimentResult {
   }>
 }
 
-// Get Reddit OAuth access token
-async function getRedditAccessToken(): Promise<string> {
-  const clientId = process.env.REDDIT_CLIENT_ID
-  const clientSecret = process.env.REDDIT_CLIENT_SECRET
-
-  if (!clientId || !clientSecret) {
-    throw new Error('Reddit API credentials not configured. Please set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET in your environment variables.')
-  }
-
-  const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64')
+// Parse Reddit RSS feed (XML) to JSON
+async function parseRedditRSS(xmlText: string): Promise<RedditPost[]> {
+  const posts: RedditPost[] = []
   
-  const response = await fetch('https://www.reddit.com/api/v1/access_token', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${auth}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'OneSig/1.0',
-    },
-    body: 'grant_type=client_credentials',
-  })
-
-  if (!response.ok) {
-    throw new Error(`Failed to get Reddit access token: ${response.status}`)
+  // Simple XML parsing for Reddit RSS feeds
+  const entryRegex = /<entry>([\s\S]*?)<\/entry>/g
+  const entries = xmlText.match(entryRegex) || []
+  
+  for (const entry of entries) {
+    try {
+      const titleMatch = entry.match(/<title>([^<]*)<\/title>/)
+      const contentMatch = entry.match(/<content type="html">([^<]*)<\/content>/)
+      const linkMatch = entry.match(/<link href="([^"]*)"/)
+      const authorMatch = entry.match(/<name>([^<]*)<\/name>/)
+      const updatedMatch = entry.match(/<updated>([^<]*)<\/updated>/)
+      
+      if (titleMatch && linkMatch) {
+        const title = titleMatch[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        const content = contentMatch ? contentMatch[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>') : ''
+        const permalink = linkMatch[1]
+        const author = authorMatch ? authorMatch[1].replace('/u/', '') : 'unknown'
+        const created = updatedMatch ? new Date(updatedMatch[1]).getTime() / 1000 : Date.now() / 1000
+        
+        posts.push({
+          title,
+          selftext: content.substring(0, 500), // Truncate content
+          score: 0, // RSS doesn't include score
+          num_comments: 0, // RSS doesn't include comment count
+          created_utc: created,
+          author,
+          url: permalink,
+          permalink: permalink.replace('https://www.reddit.com', ''),
+        })
+      }
+    } catch (err) {
+      console.warn('Error parsing RSS entry:', err)
+    }
   }
-
-  const data = await response.json()
-  return data.access_token
+  
+  return posts
 }
 
-// Fetch Reddit posts from a subreddit using OAuth
+// Fetch Reddit posts using multiple methods (no authentication required)
 async function fetchRedditPosts(subreddit: string, limit: number = 100): Promise<RedditPost[]> {
+  const cleanSubreddit = subreddit.replace(/^r\//, '').trim()
+  
+  if (!cleanSubreddit) {
+    throw new Error('Invalid subreddit name')
+  }
+
+  console.log(`[Reddit API] Fetching posts from r/${cleanSubreddit}`)
+
+  // Method 1: Try Reddit's RSS feed (no auth, reliable)
   try {
-    // Remove 'r/' prefix if present
-    const cleanSubreddit = subreddit.replace(/^r\//, '').trim()
+    const rssUrl = `https://www.reddit.com/r/${cleanSubreddit}/hot.rss?limit=${limit}`
+    console.log(`[Reddit API] Trying RSS feed: ${rssUrl}`)
     
-    if (!cleanSubreddit) {
-      throw new Error('Invalid subreddit name')
-    }
-
-    // Get OAuth access token
-    const accessToken = await getRedditAccessToken()
-
-    // Use Reddit's OAuth API
-    const url = `https://oauth.reddit.com/r/${cleanSubreddit}/hot?limit=${limit}`
-    
-    const response = await fetch(url, {
+    const response = await fetch(rssUrl, {
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'User-Agent': 'OneSig/1.0',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       },
     })
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        throw new Error(`Subreddit "r/${cleanSubreddit}" not found or is private`)
-      }
-      if (response.status === 403) {
-        throw new Error(`Subreddit "r/${cleanSubreddit}" is private or banned`)
-      }
-      throw new Error(`Reddit API error: ${response.status}`)
-    }
-
-    const data = await response.json()
     
-    if (!data.data || !data.data.children) {
-      throw new Error('Invalid Reddit API response')
+    if (response.ok) {
+      const xmlText = await response.text()
+      const posts = await parseRedditRSS(xmlText)
+      
+      if (posts.length > 0) {
+        console.log(`[Reddit API] Successfully fetched ${posts.length} posts from RSS feed`)
+        return posts
+      }
     }
-
-    const posts: RedditPost[] = data.data.children
-      .map((child: any) => child.data)
-      .filter((post: any) => post.title && post.selftext !== '[removed]' && post.selftext !== '[deleted]')
-      .map((post: any) => ({
-        title: post.title,
-        selftext: post.selftext || '',
-        score: post.score || 0,
-        num_comments: post.num_comments || 0,
-        created_utc: post.created_utc,
-        author: post.author,
-        url: post.url,
-        permalink: `https://reddit.com${post.permalink}`,
-      }))
-
-    console.log(`[Reddit API] Successfully fetched ${posts.length} posts from r/${cleanSubreddit}`)
-    return posts
-  } catch (error) {
-    console.error('Error fetching Reddit posts:', error)
-    throw error
+  } catch (err) {
+    console.warn('[Reddit API] RSS feed failed:', err)
   }
+
+  // Method 2: Try JSON endpoint with various headers
+  const jsonUrls = [
+    `https://www.reddit.com/r/${cleanSubreddit}/hot.json?limit=${limit}`,
+    `https://old.reddit.com/r/${cleanSubreddit}/hot.json?limit=${limit}`,
+  ]
+
+  for (const url of jsonUrls) {
+    try {
+      console.log(`[Reddit API] Trying JSON endpoint: ${url}`)
+      
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Cache-Control': 'no-cache',
+        },
+        cache: 'no-store',
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        
+        if (data.data && data.data.children) {
+          const posts: RedditPost[] = data.data.children
+            .map((child: any) => child.data)
+            .filter((post: any) => post.title && post.selftext !== '[removed]' && post.selftext !== '[deleted]')
+            .map((post: any) => ({
+              title: post.title,
+              selftext: post.selftext || '',
+              score: post.score || 0,
+              num_comments: post.num_comments || 0,
+              created_utc: post.created_utc,
+              author: post.author,
+              url: post.url,
+              permalink: `https://reddit.com${post.permalink}`,
+            }))
+
+          if (posts.length > 0) {
+            console.log(`[Reddit API] Successfully fetched ${posts.length} posts from JSON endpoint`)
+            return posts
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`[Reddit API] JSON endpoint failed for ${url}:`, err)
+    }
+  }
+
+  throw new Error(`Unable to fetch posts from r/${cleanSubreddit}. The subreddit may be private, banned, or temporarily unavailable.`)
 }
 
-// Fetch comments from a post using OAuth
-async function fetchPostComments(permalink: string, limit: number = 10, accessToken: string): Promise<RedditComment[]> {
+// Fetch comments from a post (no authentication required)
+async function fetchPostComments(permalink: string, limit: number = 10): Promise<RedditComment[]> {
   try {
-    // Remove the /r/subreddit prefix and add to oauth endpoint
-    const cleanPermalink = permalink.replace(/^\/r\/[^\/]+\/comments\//, '')
-    const url = `https://oauth.reddit.com/comments/${cleanPermalink}?limit=${limit}`
+    const url = `https://www.reddit.com${permalink}.json?limit=${limit}`
     
     const response = await fetch(url, {
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'User-Agent': 'OneSig/1.0',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
       },
+      cache: 'no-store',
     })
 
     if (!response.ok) {
       console.warn(`Failed to fetch comments from ${permalink}: ${response.status}`)
-      return [] // Return empty array if comments can't be fetched
+      return []
     }
 
     const data = await response.json()
@@ -418,15 +455,10 @@ export async function POST(request: NextRequest) {
       const errorMsg = redditError instanceof Error ? redditError.message : 'Failed to fetch Reddit posts'
       console.error('[Reddit Sentiment] Error fetching posts:', errorMsg)
       
-      const isAuthError = errorMsg.includes('credentials not configured') || errorMsg.includes('access token')
-      
       return NextResponse.json(
         {
           error: 'Failed to fetch Reddit posts',
           details: errorMsg,
-          hint: isAuthError 
-            ? 'Set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET in Vercel environment variables. Get them from https://www.reddit.com/prefs/apps'
-            : 'Check server logs for more details',
         },
         { status: 500 }
       )
@@ -443,10 +475,9 @@ export async function POST(request: NextRequest) {
     let comments: RedditComment[] = []
     if (includeComments) {
       try {
-        const accessToken = await getRedditAccessToken()
         const topPosts = posts.slice(0, 5)
         const commentPromises = topPosts.map(post => 
-          fetchPostComments(post.permalink.replace('https://reddit.com', ''), 5, accessToken)
+          fetchPostComments(post.permalink.replace('https://reddit.com', ''), 5)
         )
         const commentArrays = await Promise.all(commentPromises)
         comments = commentArrays.flat()

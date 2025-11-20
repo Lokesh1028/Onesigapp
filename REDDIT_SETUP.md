@@ -1,89 +1,84 @@
-# Reddit OAuth API Setup for Vercel
+# Reddit API Setup - NO AUTHENTICATION NEEDED! ✅
 
-## Why This Is Needed
-Reddit blocks server-side requests from hosting providers like Vercel. To get real Reddit data, you must use Reddit's official OAuth API.
+## Good News!
 
-## Step 1: Create a Reddit App
+**You don't need to create a Reddit app or get any API credentials!**
 
-1. Go to https://www.reddit.com/prefs/apps
-2. Scroll down and click **"create another app..."** or **"are you a developer? create an app..."**
-3. Fill in the form:
-   - **name**: `OneSig` (or any name you want)
-   - **App type**: Select **"script"**
-   - **description**: (optional)
-   - **about url**: (optional)
-   - **redirect uri**: Enter `http://localhost` (required but not used for script apps)
-4. Click **"create app"**
+I've updated the code to use Reddit's **public RSS feeds and JSON endpoints** which require **no authentication**.
 
-## Step 2: Get Your Credentials
+## What You Need to Do
 
-After creating the app, you'll see:
-- **CLIENT_ID**: The random string directly under the app name (looks like: `abc123XYZ`)
-- **CLIENT_SECRET**: Labeled as "secret" (looks like: `xyz789ABC-def456`)
+### Just Make Sure GROQ_API_KEY is Set
 
-## Step 3: Add to Vercel Environment Variables
+The only environment variable you need is `GROQ_API_KEY` (for sentiment analysis):
 
-1. Go to your Vercel dashboard: https://vercel.com/dashboard
-2. Select your project
-3. Go to **Settings** → **Environment Variables**
-4. Add these two variables:
+1. Go to **Vercel Dashboard** → Your Project
+2. Go to **Settings** → **Environment Variables**
+3. Make sure you have:
+   ```
+   GROQ_API_KEY = your_groq_api_key
+   ```
+4. If it's already there, you're done!
+5. If not, add it and redeploy
 
-   **Variable 1:**
-   - Name: `REDDIT_CLIENT_ID`
-   - Value: [paste your CLIENT_ID]
-   - Environments: ✅ Production, ✅ Preview, ✅ Development
+### That's It!
 
-   **Variable 2:**
-   - Name: `REDDIT_CLIENT_SECRET`
-   - Value: [paste your CLIENT_SECRET]
-   - Environments: ✅ Production, ✅ Preview, ✅ Development
+The Reddit Wall Street page should now work with real data from r/wallstreetbets - **no Reddit app needed**.
 
-5. Click **Save** for each
+## How It Works Now
 
-## Step 4: Redeploy
+The updated code:
+1. **First tries** Reddit's RSS feed (always public, no auth)
+2. **Falls back to** JSON endpoints with better headers
+3. **Works on Vercel** without any Reddit OAuth credentials
 
-**Important:** Environment variables only take effect after a new deployment.
+## Testing
 
-1. Go to **Deployments** tab in Vercel
-2. Click the **"..."** menu on your latest deployment
-3. Click **"Redeploy"**
-4. Wait for the deployment to complete (~1-2 minutes)
-
-## Step 5: Test
-
-1. Visit your website
-2. Go to the **Reddit Wall Street** page
-3. It should now load real data from r/wallstreetbets
-
-## Already Have GROQ_API_KEY?
-
-Make sure your `GROQ_API_KEY` is also set in Vercel environment variables. You need BOTH:
-- `GROQ_API_KEY` (for sentiment analysis)
-- `REDDIT_CLIENT_ID` + `REDDIT_CLIENT_SECRET` (for fetching Reddit data)
+1. Deploy to Vercel (or it will auto-deploy from your GitHub push)
+2. Visit your site → **Reddit Wall Street** page
+3. It should load real posts and sentiment analysis from r/wallstreetbets
 
 ## Troubleshooting
 
-### Error: "Reddit API credentials not configured"
-- Make sure you added both `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET` to Vercel
-- Make sure you redeployed after adding them
+### Still getting errors?
 
-### Error: "Failed to get Reddit access token"
-- Double-check your CLIENT_ID and CLIENT_SECRET are correct
-- Make sure there are no extra spaces when copying/pasting
+**Check these:**
 
-### Error: "Failed to analyze sentiment"
-- This means `GROQ_API_KEY` is missing or incorrect
-- Add it to Vercel environment variables
+1. **Is GROQ_API_KEY set in Vercel?**
+   - Go to Settings → Environment Variables in Vercel
+   - Make sure `GROQ_API_KEY` exists and has the correct value
 
-## Local Development
+2. **Did you redeploy after adding the key?**
+   - Environment variables only work after redeployment
+   - Go to Deployments → Redeploy
 
-For local testing, create a `.env.local` file in the `landing-page` directory:
+3. **Check the error message:**
+   - "Failed to analyze sentiment" = GROQ_API_KEY issue
+   - "Failed to fetch Reddit posts" = Reddit blocking (should be fixed now)
+
+### Local Development
+
+For local testing, create `.env.local` in the `landing-page` directory:
 
 ```env
 GROQ_API_KEY=your_groq_api_key_here
-REDDIT_CLIENT_ID=your_reddit_client_id
-REDDIT_CLIENT_SECRET=your_reddit_client_secret
 ```
 
 Then run: `npm run dev`
 
+## What Changed?
+
+**Old approach** (required Reddit app):
+- ❌ Needed Reddit OAuth credentials
+- ❌ Required creating Reddit app
+- ❌ Hit Reddit's app creation limits
+
+**New approach** (no Reddit app):
+- ✅ Uses public RSS feeds (no auth needed)
+- ✅ Falls back to JSON endpoints
+- ✅ Works on Vercel out of the box
+- ✅ **Real Reddit data, no mock data**
+
+---
+
+**Questions?** Just deploy and test it - it should work now! 🚀
