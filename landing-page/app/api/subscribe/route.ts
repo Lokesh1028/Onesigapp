@@ -49,7 +49,7 @@ async function checkEmailExists(email: string): Promise<boolean> {
 }
 
 // Insert subscriber into Supabase
-async function insertSubscriber(name: string, email: string): Promise<void> {
+async function insertSubscriber(name: string, email: string, whatsapp?: string): Promise<void> {
   const supabase = getSupabaseClient()
 
   const { error } = await supabase
@@ -57,6 +57,7 @@ async function insertSubscriber(name: string, email: string): Promise<void> {
     .insert({
       name: name.trim(),
       email: email.trim().toLowerCase(),
+      whatsapp: whatsapp ? whatsapp.trim() : null,
       subscribed_at: new Date().toISOString(),
     })
 
@@ -65,13 +66,13 @@ async function insertSubscriber(name: string, email: string): Promise<void> {
     throw new Error(`Failed to save subscriber: ${error.message}`)
   }
 
-  console.log(`Successfully added subscriber: ${name} (${email})`)
+  console.log(`Successfully added subscriber: ${name} (${email})${whatsapp ? ` - WhatsApp: ${whatsapp}` : ''}`)
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, email } = body
+    const { name, email, whatsapp } = body
 
     // Validation
     if (!name || !email) {
@@ -90,6 +91,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Optional WhatsApp validation
+    if (whatsapp && whatsapp.trim() && !/^\+?[1-9]\d{1,14}$/.test(whatsapp.replace(/[\s-]/g, ''))) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid WhatsApp number format. Please include country code (e.g., +1234567890)' },
+        { status: 400 }
+      )
+    }
+
     // Check if email already exists
     const exists = await checkEmailExists(email)
     if (exists) {
@@ -100,7 +109,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert into Supabase
-    await insertSubscriber(name.trim(), email.trim().toLowerCase())
+    await insertSubscriber(name.trim(), email.trim().toLowerCase(), whatsapp?.trim())
 
     return NextResponse.json({
       success: true,
