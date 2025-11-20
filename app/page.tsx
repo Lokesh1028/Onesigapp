@@ -17,10 +17,10 @@ export default function Home() {
         <div className="section-container py-12">
           <div className="max-w-3xl mx-auto text-center">
             <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
-              Track Insider & Congressional Trading
+              See What Insiders, Senators and WallStreetBets Are Trading, along key market stats
             </h1>
             <p className="text-xl text-gray-600 mb-8">
-              Get real-time insights into significant trades by company insiders and U.S. Senators
+              Get signals from insider filings, congressional trades and the hottest WSB tickers before the crowd catches on.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
@@ -34,6 +34,12 @@ export default function Home() {
                 className="btn-secondary text-center"
               >
                 View Senate Trades
+              </Link>
+              <Link
+                href="/reddit-sentiment"
+                className="btn-primary text-center"
+              >
+                Reddit Wall Street
               </Link>
             </div>
           </div>
