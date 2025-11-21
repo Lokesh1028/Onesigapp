@@ -53,18 +53,6 @@ export default function Home() {
         </div>
 
         <div className="relative z-10 max-w-5xl w-full text-center space-y-12">
-          {/* Hero Text */}
-          <div className="space-y-6">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tighter leading-tight text-white drop-shadow-lg">
-              See What Insiders, Senators and <br className="hidden md:block" />
-              WallStreetBets Are Trading, <br className="hidden md:block" />
-              along key market stats
-            </h1>
-            <p className="text-lg sm:text-xl text-gray-300 max-w-3xl mx-auto leading-relaxed font-light">
-              Get signals from insider filings, congressional trades and the hottest WSB tickers before the crowd catches on.
-            </p>
-          </div>
-
           {/* Feature Buttons (As requested in image) */}
           <div className="flex flex-wrap justify-center gap-4 w-full">
             <FeatureButton
