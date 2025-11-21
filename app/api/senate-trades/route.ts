@@ -74,12 +74,19 @@ function transformAInvestTrade(ainvestTrade: AInvestCongressTrade, ticker: strin
   const finalCompanyName = companyName || ticker || 'N/A'
 
   // Construct disclosure link - link to official Congress financial disclosure search
-  // Senate: https://efdsearch.senate.gov/search/
-  // House: https://disclosures-clerk.house.gov/PublicDisclosure/FinancialDisclosure
+  // Senate Financial Disclosure: https://efdsearch.senate.gov/search/
+  // House Financial Disclosure: https://disclosures-clerk.house.gov/PublicDisclosure/FinancialDisclosure
   const senatorName = ainvestTrade.name || 'Unknown Congress Member'
-  // Link to official Senate financial disclosure search (works for Senate members)
-  // For House members, users can search at: https://disclosures-clerk.house.gov/PublicDisclosure/FinancialDisclosure
-  const disclosureLink = `https://efdsearch.senate.gov/search/?q=${encodeURIComponent(senatorName)}`
+  const state = ainvestTrade.state || ''
+  const filingDate = ainvestTrade.filing_date || ''
+  
+  // Link to the official Senate financial disclosure search page
+  // Users can search by senator name, state, and filing date to find the specific disclosure document
+  // The Senate disclosure search is at: https://efdsearch.senate.gov/search/
+  const disclosureLink = `https://efdsearch.senate.gov/search/`
+  
+  // Note: The AInvest API doesn't provide direct document links
+  // Users will need to search on the Senate site using the senator's name and filing date
 
   return {
     filing_date: disclosureDate,
