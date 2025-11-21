@@ -80,11 +80,10 @@ export default function EmailSignupForm({ variant = 'light' }: EmailSignupFormPr
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Your name"
-            className={`w-full px-4 py-3 rounded-lg border ${
-              isDark
-                ? 'bg-white text-gray-900 border-primary-300 placeholder:text-gray-500'
-                : 'bg-white text-gray-900 border-gray-300 placeholder:text-gray-400'
-            } focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent`}
+            className={`w-full px-4 py-3 rounded-lg border ${isDark
+                ? 'bg-gray-800/50 text-white border-gray-600 placeholder:text-gray-400 focus:ring-cyan-500'
+                : 'bg-white text-gray-900 border-gray-300 placeholder:text-gray-400 focus:ring-primary-500'
+              } focus:outline-none focus:ring-2 focus:border-transparent transition-all`}
             required
             disabled={status === 'loading' || status === 'success'}
           />
@@ -93,11 +92,10 @@ export default function EmailSignupForm({ variant = 'light' }: EmailSignupFormPr
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Your email"
-            className={`w-full px-4 py-3 rounded-lg border ${
-              isDark
-                ? 'bg-white text-gray-900 border-primary-300 placeholder:text-gray-500'
-                : 'bg-white text-gray-900 border-gray-300 placeholder:text-gray-400'
-            } focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent`}
+            className={`w-full px-4 py-3 rounded-lg border ${isDark
+                ? 'bg-gray-800/50 text-white border-gray-600 placeholder:text-gray-400 focus:ring-cyan-500'
+                : 'bg-white text-gray-900 border-gray-300 placeholder:text-gray-400 focus:ring-primary-500'
+              } focus:outline-none focus:ring-2 focus:border-transparent transition-all`}
             required
             disabled={status === 'loading' || status === 'success'}
           />
@@ -106,23 +104,20 @@ export default function EmailSignupForm({ variant = 'light' }: EmailSignupFormPr
             value={whatsapp}
             onChange={(e) => setWhatsapp(e.target.value)}
             placeholder="WhatsApp number "
-            className={`w-full px-4 py-3 rounded-lg border ${
-              isDark
-                ? 'bg-white text-gray-900 border-primary-300 placeholder:text-gray-500'
-                : 'bg-white text-gray-900 border-gray-300 placeholder:text-gray-400'
-            } focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent`}
+            className={`w-full px-4 py-3 rounded-lg border ${isDark
+                ? 'bg-gray-800/50 text-white border-gray-600 placeholder:text-gray-400 focus:ring-cyan-500'
+                : 'bg-white text-gray-900 border-gray-300 placeholder:text-gray-400 focus:ring-primary-500'
+              } focus:outline-none focus:ring-2 focus:border-transparent transition-all`}
             disabled={status === 'loading' || status === 'success'}
           />
           <button
             type="submit"
             disabled={status === 'loading' || status === 'success'}
-            className={`w-full px-8 py-3 rounded-lg font-semibold transition-all duration-200 ${
-              isDark
-                ? 'bg-white text-primary-600 hover:bg-gray-100'
+            className={`w-full px-8 py-3 rounded-lg font-semibold transition-all duration-200 ${isDark
+                ? 'bg-cyan-600 text-white hover:bg-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.3)]'
                 : 'bg-primary-600 text-white hover:bg-primary-700'
-            } disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-              isDark ? 'focus:ring-white' : 'focus:ring-primary-500'
-            }`}
+              } disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 ${isDark ? 'focus:ring-cyan-500 focus:ring-offset-gray-900' : 'focus:ring-primary-500'
+              }`}
           >
             {status === 'loading' ? (
               <span className="flex items-center">
@@ -143,11 +138,10 @@ export default function EmailSignupForm({ variant = 'light' }: EmailSignupFormPr
         {/* Status Message */}
         {message && (
           <div
-            className={`text-sm p-3 rounded-lg ${
-              status === 'success'
+            className={`text-sm p-3 rounded-lg ${status === 'success'
                 ? 'bg-green-50 text-green-800 border border-green-200'
                 : 'bg-red-50 text-red-800 border border-red-200'
-            }`}
+              }`}
           >
             {message}
           </div>

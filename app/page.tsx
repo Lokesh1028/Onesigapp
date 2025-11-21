@@ -1,103 +1,113 @@
 'use client'
 
-import Link from 'next/link'
 import Navigation from '@/components/Navigation'
 import EmailSignupForm from '@/components/EmailSignupForm'
+import Link from 'next/link'
 
 // Prevent static generation - this page uses client-side hooks
 export const dynamic = 'force-dynamic'
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#050b14] text-white font-sans selection:bg-cyan-500/30 flex flex-col overflow-x-hidden">
       <Navigation />
 
-      {/* Hero Section */}
-      <section className="bg-white border-b">
-        <div className="section-container py-12">
-          <div className="max-w-3xl mx-auto text-center">
-            <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
-              See What Insiders, Senators and WallStreetBets Are Trading, along key market stats
+      <main className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 py-12 sm:py-20 relative">
+        {/* Background Chart Graphics */}
+        <div className="absolute inset-0 w-full h-full pointer-events-none overflow-hidden z-0">
+          {/* Deep Blue Gradient Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#050b14] via-[#0a1628] to-[#050b14] opacity-90" />
+
+          {/* Grid Lines */}
+          <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-[0.03]" />
+
+          {/* Chart SVG */}
+          <svg className="absolute bottom-0 left-0 w-full h-[60vh] opacity-80" preserveAspectRatio="none" viewBox="0 0 1440 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {/* Green Line (Growth/Spiky) */}
+            <path d="M0 500 L 100 480 L 200 520 L 300 400 L 400 450 L 500 300 L 600 350 L 700 200 L 800 250 L 900 150 L 1000 180 L 1100 80 L 1200 120 L 1300 40 L 1440 0 V 600 H 0 V 500 Z" fill="url(#greenGradient)" fillOpacity="0.1" />
+            <path d="M0 500 L 100 480 L 200 520 L 300 400 L 400 450 L 500 300 L 600 350 L 700 200 L 800 250 L 900 150 L 1000 180 L 1100 80 L 1200 120 L 1300 40 L 1440 0" stroke="#22c55e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
+
+            {/* Red Line (Volatile/Dip) */}
+            <path d="M0 550 L 150 520 L 250 580 L 400 450 L 500 500 L 650 400 L 800 480 L 950 350 L 1100 420 L 1250 300 L 1440 350" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-[0_0_10px_rgba(239,68,68,0.5)]" />
+
+            {/* Faint Candlesticks (Abstract representation - Updated colors) */}
+            <rect x="100" y="450" width="4" height="40" fill="#22c55e" opacity="0.2" />
+            <rect x="102" y="430" width="1" height="80" fill="#22c55e" opacity="0.2" />
+
+            <rect x="250" y="480" width="4" height="30" fill="#ef4444" opacity="0.2" />
+            <rect x="252" y="470" width="1" height="50" fill="#ef4444" opacity="0.2" />
+
+            <rect x="800" y="250" width="4" height="60" fill="#22c55e" opacity="0.2" />
+            <rect x="802" y="220" width="1" height="120" fill="#22c55e" opacity="0.2" />
+
+            <rect x="1200" y="100" width="4" height="50" fill="#ef4444" opacity="0.2" />
+            <rect x="1202" y="80" width="1" height="90" fill="#ef4444" opacity="0.2" />
+
+            <defs>
+              <linearGradient id="greenGradient" x1="720" y1="0" x2="720" y2="600" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#22c55e" stopOpacity="0.4" />
+                <stop offset="1" stopColor="#22c55e" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+
+        <div className="relative z-10 max-w-5xl w-full text-center space-y-12">
+          {/* Hero Text */}
+          <div className="space-y-6">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tighter leading-tight text-white drop-shadow-lg">
+              See What Insiders, Senators and <br className="hidden md:block" />
+              WallStreetBets Are Trading, <br className="hidden md:block" />
+              along key market stats
             </h1>
-            <p className="text-xl text-gray-600 mb-8">
+            <p className="text-lg sm:text-xl text-gray-300 max-w-3xl mx-auto leading-relaxed font-light">
               Get signals from insider filings, congressional trades and the hottest WSB tickers before the crowd catches on.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link
-                href="/insider-trades"
-                className="btn-primary text-center"
-              >
-                View Insider Trades
-              </Link>
-              <Link
-                href="/senate-trades"
-                className="btn-secondary text-center"
-              >
-                View Senate Trades
-              </Link>
-              <Link
-                href="/reddit-sentiment"
-                className="btn-primary text-center"
-              >
-                Reddit Wall Street
-              </Link>
-            </div>
           </div>
-        </div>
-      </section>
 
-      {/* Newsletter Subscription Section */}
-      <section id="newsletter" className="bg-white border-t border-b">
-        <div className="section-container py-12">
-          <div className="max-w-2xl mx-auto text-center">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
-              Subscribe to Newsletter
-            </h2>
-            <p className="text-lg text-gray-600 mb-8">
-              Weekly market intelligence- key insider and senators trades, big moves, and next week’s must-watch events - sent to your inbox and WhatsApp. Join below
+          {/* Feature Buttons (As requested in image) */}
+          <div className="flex flex-wrap justify-center gap-4 w-full">
+            <FeatureButton
+              href="/insider-trades"
+              label="View Insider Trades"
+            />
+            <FeatureButton
+              href="/senate-trades"
+              label="View Senate Trades"
+            />
+            <FeatureButton
+              href="/reddit-sentiment"
+              label="Reddit Wall Street"
+            />
+          </div>
+
+          {/* Newsletter Subscription - Card Style */}
+          <div className="max-w-xl mx-auto w-full bg-[#111827]/80 p-8 rounded-2xl border border-gray-700/50 backdrop-blur-md shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-4">Subscribe to Newsletter</h2>
+            <p className="text-sm text-gray-400 mb-6">
+              Weekly market intelligence- key insider and senators trades, big moves, and next week's must-watch events - sent to your inbox and WhatsApp. Join below
             </p>
-            <EmailSignupForm />
+            <EmailSignupForm variant="dark" />
           </div>
         </div>
-      </section>
+      </main>
 
-      {/* Coming Soon Section */}
-      <section className="section-container py-16">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold text-gray-900 text-center mb-8">Coming Soon</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-lg shadow-sm border border-primary-200 p-8 text-center">
-              <div className="w-16 h-16 bg-primary-200 rounded-full flex items-center justify-center mx-auto mb-4 opacity-60">
-                <svg className="w-8 h-8 text-primary-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                </svg>
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">My Investments</h3>
-              <p className="text-gray-700 mb-4">
-                Select stocks to monitor and get personalized investment insights from top investor personas.
-              </p>
-              <span className="inline-block px-4 py-2 bg-primary-600 text-white text-sm font-semibold rounded-full">
-                Coming Soon
-              </span>
-            </div>
+      <footer className="py-8 text-center text-sm text-gray-500 relative z-10">
+        <p>© {new Date().getFullYear()} OneSig. All rights reserved.</p>
+      </footer>
+    </div>
+  )
+}
 
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg shadow-sm border border-blue-200 p-8 text-center">
-              <div className="w-16 h-16 bg-blue-200 rounded-full flex items-center justify-center mx-auto mb-4 opacity-60">
-                <svg className="w-8 h-8 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">Retirement Calculator</h3>
-              <p className="text-gray-700 mb-4">
-                Calculate your path to financial freedom and determine when you can retire comfortably.
-              </p>
-              <span className="inline-block px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-full">
-                Coming Soon
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
+function FeatureButton({ href, label }: { href: string, label: string }) {
+  return (
+    <Link
+      href={href}
+      className="px-8 py-3 rounded-lg bg-[#0f172a]/60 border border-cyan-500/30 text-cyan-100 font-medium 
+                 hover:bg-cyan-500/10 hover:border-cyan-400 hover:text-cyan-300 hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] 
+                 transition-all duration-300 backdrop-blur-sm"
+    >
+      {label}
+    </Link>
   )
 }

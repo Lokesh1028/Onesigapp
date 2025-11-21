@@ -9,34 +9,24 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: 'hsl(var(--background))',
-        foreground: 'hsl(var(--foreground))',
-        primary: {
-          50: '#f0f9ff',
-          100: '#e0f2fe',
-          200: '#bae6fd',
-          300: '#7dd3fc',
-          400: '#38bdf8',
-          500: '#0ea5e9',
-          600: '#0284c7',
-          700: '#0369a1',
-          800: '#075985',
-          900: '#0c4a6e',
-        },
-        success: {
-          light: '#10b981',
-          DEFAULT: '#059669',
-          dark: '#047857',
-        },
-        danger: {
-          light: '#ef4444',
-          DEFAULT: '#dc2626',
-          dark: '#b91c1c',
-        },
+        // Structural Palette
+        'void-black': '#0B0C10',
+        'abyssal-blue': '#161722',
+        'gunmetal': '#25273C',
+        'text-white': '#E4E5F1',
+        'muted-steel': '#A0A3BD',
+        
+        // Signal Palette
+        'growth-green': '#00E396',
+        'correction-red': '#FF4560',
+        'neutral-amber': '#FEB019',
+        'signal-violet': '#7D5FFF',
+        'data-blue': '#008FFB',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
+        sans: ['var(--font-jakarta)', 'Inter', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-jetbrains)', 'JetBrains Mono', 'monospace'],
+        serif: ['var(--font-merriweather)', 'Merriweather', 'serif'],
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-in-out',

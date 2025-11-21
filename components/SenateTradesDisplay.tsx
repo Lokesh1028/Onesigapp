@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import CompanyLogo from '@/components/CompanyLogo'
+import { getCachedData, setCachedData } from '@/utils/apiCache'
 
 interface SenateTrade {
   filing_date: string
@@ -44,7 +45,29 @@ export default function SenateTradesDisplay() {
   }, [])
 
   const fetchTrades = async (forceRefresh = false) => {
-    setLoading(true)
+    const cacheKey = 'senate_trades'
+
+    // Try to load from cache first if not forced
+    if (!forceRefresh) {
+      const { data: cachedData, shouldRefresh } = getCachedData<SenateTradesResponse>(cacheKey)
+
+      if (cachedData) {
+        setData(cachedData)
+        setLastUpdated(new Date(cachedData.lastUpdated))
+        setLoading(false)
+        console.log('Loaded senate trades from cache')
+
+        if (!shouldRefresh) {
+          return
+        }
+        console.log('Cache is stale, refreshing in background...')
+      } else {
+        setLoading(true)
+      }
+    } else {
+      setLoading(true)
+    }
+
     setError(null)
 
     try {
@@ -60,8 +83,14 @@ export default function SenateTradesDisplay() {
       const result: SenateTradesResponse = await response.json()
       setData(result)
       setLastUpdated(new Date(result.lastUpdated))
+
+      // Save to cache
+      setCachedData(cacheKey, result)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch senate trades')
+      // If we have cached data, don't show error for background refresh
+      if (!data) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch senate trades')
+      }
       console.error('Error fetching senate trades:', err)
     } finally {
       setLoading(false)
@@ -294,11 +323,10 @@ export default function SenateTradesDisplay() {
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <span
-                        className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${
-                          trade.trade_type === 'Buy'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
+                        className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${trade.trade_type === 'Buy'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                          }`}
                       >
                         {trade.trade_type}
                       </span>
@@ -363,11 +391,10 @@ export default function SenateTradesDisplay() {
                     </div>
                   </div>
                   <span
-                    className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
-                      trade.trade_type === 'Buy'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}
+                    className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${trade.trade_type === 'Buy'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-red-100 text-red-800'
+                      }`}
                   >
                     {trade.trade_type}
                   </span>

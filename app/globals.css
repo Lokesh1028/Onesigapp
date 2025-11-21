@@ -4,40 +4,45 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: #0B0C10;
+    --foreground: #E4E5F1;
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-void-black text-text-white font-sans antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
+@layer utilities {
+  .glass-panel {
+    @apply bg-abyssal-blue/80 backdrop-blur-md border border-gunmetal;
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-signal-violet to-data-blue;
+  }
+}
+
 @layer components {
+
   /* Custom button styles */
   .btn-primary {
-    @apply bg-primary-600 text-white px-6 py-3 rounded-lg font-semibold
-           hover:bg-primary-700 transition-colors duration-200
-           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
+    @apply bg-signal-violet text-white px-6 py-3 rounded-lg font-semibold hover:bg-signal-violet/80 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-signal-violet focus:ring-offset-2 focus:ring-offset-void-black;
   }
 
   .btn-secondary {
-    @apply bg-gray-200 text-gray-800 px-6 py-3 rounded-lg font-semibold
-           hover:bg-gray-300 transition-colors duration-200
-           focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2;
+    @apply bg-gunmetal text-text-white px-6 py-3 rounded-lg font-semibold hover:bg-gunmetal/80 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-muted-steel focus:ring-offset-2 focus:ring-offset-void-black;
   }
 
   /* Input styles */
   .input-field {
-    @apply w-full px-4 py-3 border border-gray-300 rounded-lg
-           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
-           placeholder:text-gray-400;
+    @apply w-full px-4 py-3 bg-abyssal-blue border border-gunmetal rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-signal-violet focus:border-transparent placeholder:text-muted-steel;
   }
 
   /* Card styles */
   .card {
-    @apply bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-200;
+    @apply bg-abyssal-blue rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-200 border border-gunmetal;
   }
 
   /* Section container */

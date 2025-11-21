@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import CompanyLogo from '@/components/CompanyLogo'
+import { getCachedData, setCachedData } from '@/utils/apiCache'
 
 interface Insight {
   filing_date: string
@@ -100,9 +101,28 @@ export default function InsightsDisplay() {
   }, [lastUpdated])
 
   const fetchAllInsights = async (silent = false) => {
+    const cacheKey = 'insights_all'
+
+    // Try to load from cache first if not a silent refresh
     if (!silent) {
-      setLoading(true)
+      const { data: cachedData, shouldRefresh } = getCachedData<AllTimeframesResponse>(cacheKey)
+
+      if (cachedData) {
+        setAllData(cachedData)
+        setLastUpdated(new Date(cachedData.lastUpdated))
+        setLoading(false)
+        console.log('Loaded insights from cache')
+
+        // If cache is fresh enough, we don't need to fetch
+        if (!shouldRefresh) {
+          return
+        }
+        console.log('Cache is stale, refreshing in background...')
+      } else {
+        setLoading(true)
+      }
     }
+
     setError(null)
 
     try {
@@ -117,12 +137,18 @@ export default function InsightsDisplay() {
       const result: AllTimeframesResponse = await response.json()
       setAllData(result)
       setLastUpdated(new Date(result.lastUpdated))
-      
+
+      // Save to cache
+      setCachedData(cacheKey, result)
+
       if (!silent) {
         console.log('All timeframes loaded successfully')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch insights')
+      // If we have cached data, don't show error for background refresh
+      if (!allData) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch insights')
+      }
       console.error('Error fetching insights:', err)
     } finally {
       if (!silent) {
@@ -199,31 +225,28 @@ export default function InsightsDisplay() {
         <div className="flex gap-2">
           <button
             onClick={() => setTimeframe(1)}
-            className={`px-4 py-2 rounded-lg font-medium transition-all ${
-              timeframe === 1
-                ? 'bg-primary-600 text-white shadow-md'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`px-4 py-2 rounded-lg font-medium transition-all ${timeframe === 1
+              ? 'bg-primary-600 text-white shadow-md'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
           >
             1 Day
           </button>
           <button
             onClick={() => setTimeframe(7)}
-            className={`px-4 py-2 rounded-lg font-medium transition-all ${
-              timeframe === 7
-                ? 'bg-primary-600 text-white shadow-md'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`px-4 py-2 rounded-lg font-medium transition-all ${timeframe === 7
+              ? 'bg-primary-600 text-white shadow-md'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
           >
             7 Days
           </button>
           <button
             onClick={() => setTimeframe(30)}
-            className={`px-4 py-2 rounded-lg font-medium transition-all ${
-              timeframe === 30
-                ? 'bg-primary-600 text-white shadow-md'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`px-4 py-2 rounded-lg font-medium transition-all ${timeframe === 30
+              ? 'bg-primary-600 text-white shadow-md'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
           >
             30 Days
           </button>
@@ -341,11 +364,10 @@ export default function InsightsDisplay() {
                       <div className="text-xs text-gray-500">{insight.officer_title}</div>
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      <span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${
-                        insight.trade_type === 'Buy'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
+                      <span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${insight.trade_type === 'Buy'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
+                        }`}>
                         {insight.trade_type}
                       </span>
                     </td>
@@ -388,11 +410,10 @@ export default function InsightsDisplay() {
                       <div className="text-sm text-gray-600">{insight.company_name}</div>
                     </div>
                   </div>
-                  <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
-                    insight.trade_type === 'Buy'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
-                  }`}>
+                  <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${insight.trade_type === 'Buy'
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
+                    }`}>
                     {insight.trade_type}
                   </span>
                 </div>

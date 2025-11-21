@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { getCachedData, setCachedData } from '@/utils/apiCache'
 
 interface SentimentResult {
   overall_sentiment: 'positive' | 'negative' | 'neutral'
@@ -56,8 +57,8 @@ export default function RedditSentimentAnalyzer() {
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState<AnalysisResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [selectedStock, setSelectedStock] = useState<{ticker: string, sentiment_score: number, prediction: string, reasons: string[], type: 'positive' | 'negative'} | null>(null)
-  const [stockPriceChange, setStockPriceChange] = useState<{[key: string]: {change: number, changePercent: number}} | null>(null)
+  const [selectedStock, setSelectedStock] = useState<{ ticker: string, sentiment_score: number, prediction: string, reasons: string[], type: 'positive' | 'negative' } | null>(null)
+  const [stockPriceChange, setStockPriceChange] = useState<{ [key: string]: { change: number, changePercent: number } } | null>(null)
 
   // Debug modal state
   useEffect(() => {
@@ -74,9 +75,28 @@ export default function RedditSentimentAnalyzer() {
       return
     }
 
-    setLoading(true)
+    const cacheKey = `reddit_sentiment_${subreddit.trim().toLowerCase()}_${includeComments}`
+
+    // Try to load from cache first
+    const { data: cachedData, shouldRefresh } = getCachedData<AnalysisResponse>(cacheKey)
+
+    if (cachedData) {
+      setResults(cachedData)
+      console.log('Loaded sentiment analysis from cache')
+
+      if (!shouldRefresh) {
+        return
+      }
+      console.log('Cache is stale, refreshing in background...')
+    } else {
+      setLoading(true)
+    }
+
     setError(null)
-    setResults(null)
+    // Don't clear results if we have cached data (for background refresh)
+    if (!cachedData) {
+      setResults(null)
+    }
 
     try {
       const response = await fetch('/api/reddit-sentiment', {
@@ -105,8 +125,14 @@ export default function RedditSentimentAnalyzer() {
       }
 
       setResults(data)
+      setCachedData(cacheKey, data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      // If we have cached data, show error as a toast or log it, but keep showing data
+      if (!cachedData) {
+        setError(err instanceof Error ? err.message : 'An error occurred')
+      } else {
+        console.error('Background refresh failed:', err)
+      }
     } finally {
       setLoading(false)
     }
@@ -125,7 +151,7 @@ export default function RedditSentimentAnalyzer() {
       const normalizedTickers = tickers.map(t => t.replace(/^\$/, '').toUpperCase())
       console.log('[Stock History] Original tickers:', tickers)
       console.log('[Stock History] Normalized tickers:', normalizedTickers)
-      
+
       // Fetch 7-day historical prices from FMP API
       const response = await fetch('/api/stock-history', {
         method: 'POST',
@@ -134,9 +160,9 @@ export default function RedditSentimentAnalyzer() {
       })
       const data = await response.json()
       console.log('[Stock History] Response:', data)
-      
+
       if (data.success && data.stocks && Array.isArray(data.stocks)) {
-        const changes: {[key: string]: {change: number, changePercent: number}} = {}
+        const changes: { [key: string]: { change: number, changePercent: number } } = {}
         data.stocks.forEach((stock: any) => {
           if (stock.symbol && stock.change !== undefined && stock.changePercent !== undefined) {
             // Store with uppercase key for consistency
@@ -249,7 +275,7 @@ export default function RedditSentimentAnalyzer() {
                     <span className="text-xs font-medium text-green-700">+1.0 (Very Bullish)</span>
                   </div>
                   <div className="relative h-2 bg-gray-200 rounded-full">
-                    <div 
+                    <div
                       className={`absolute h-2 rounded-full ${selectedStock.type === 'positive' ? 'bg-green-600' : 'bg-red-600'}`}
                       style={{
                         left: selectedStock.sentiment_score < 0 ? `${50 + (selectedStock.sentiment_score * 50)}%` : '50%',
@@ -262,8 +288,8 @@ export default function RedditSentimentAnalyzer() {
                       {selectedStock.sentiment_score > 0 ? '+' : ''}{selectedStock.sentiment_score.toFixed(2)}
                     </span>
                     <p className="text-xs text-gray-600 mt-1">
-                      {Math.abs(selectedStock.sentiment_score) > 0.7 ? 'Very Strong' : 
-                       Math.abs(selectedStock.sentiment_score) > 0.4 ? 'Strong' : 'Moderate'} {selectedStock.type === 'positive' ? 'Bullish' : 'Bearish'} Sentiment
+                      {Math.abs(selectedStock.sentiment_score) > 0.7 ? 'Very Strong' :
+                        Math.abs(selectedStock.sentiment_score) > 0.4 ? 'Strong' : 'Moderate'} {selectedStock.type === 'positive' ? 'Bullish' : 'Bearish'} Sentiment
                     </p>
                   </div>
                 </div>
@@ -308,9 +334,9 @@ export default function RedditSentimentAnalyzer() {
                     </div>
                     <div className={`mt-3 pt-3 border-t ${stockPriceChange[selectedStock.ticker].change >= 0 ? 'border-green-200' : 'border-red-200'}`}>
                       <p className="text-xs text-gray-600">
-                        <strong>Analysis:</strong> The stock has {stockPriceChange[selectedStock.ticker].change >= 0 ? 'moved up' : 'moved down'} by {Math.abs(stockPriceChange[selectedStock.ticker].changePercent).toFixed(2)}% in the past week. 
-                        {(selectedStock.prediction === 'increase' && stockPriceChange[selectedStock.ticker].change >= 0) || 
-                         (selectedStock.prediction === 'decrease' && stockPriceChange[selectedStock.ticker].change < 0)
+                        <strong>Analysis:</strong> The stock has {stockPriceChange[selectedStock.ticker].change >= 0 ? 'moved up' : 'moved down'} by {Math.abs(stockPriceChange[selectedStock.ticker].changePercent).toFixed(2)}% in the past week.
+                        {(selectedStock.prediction === 'increase' && stockPriceChange[selectedStock.ticker].change >= 0) ||
+                          (selectedStock.prediction === 'decrease' && stockPriceChange[selectedStock.ticker].change < 0)
                           ? ' ✅ This aligns with the sentiment prediction.'
                           : ' ⚠️ This differs from the sentiment prediction - market factors may be at play.'}
                       </p>
@@ -586,7 +612,7 @@ export default function RedditSentimentAnalyzer() {
           {(results.sentiment.positive_stocks?.length > 0 || results.sentiment.negative_stocks?.length > 0) && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="text-xl font-bold text-gray-900 mb-6">Stock Sentiment & Price Predictions</h3>
-              
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Positive Stocks */}
                 {results.sentiment.positive_stocks?.length > 0 && (
@@ -600,8 +626,8 @@ export default function RedditSentimentAnalyzer() {
                     <div className="space-y-3">
                       {results.sentiment.positive_stocks.map((stock, idx) => (
                         <div key={idx} className="border border-green-300 rounded-lg p-3 bg-white relative">
-                          <button 
-                            onClick={() => setSelectedStock({ticker: stock.ticker.replace(/^\$/, '').toUpperCase(), sentiment_score: stock.sentiment_score, prediction: stock.prediction, reasons: stock.reasons, type: 'positive'})}
+                          <button
+                            onClick={() => setSelectedStock({ ticker: stock.ticker.replace(/^\$/, '').toUpperCase(), sentiment_score: stock.sentiment_score, prediction: stock.prediction, reasons: stock.reasons, type: 'positive' })}
                             className="absolute top-2 right-2 p-1.5 rounded-full bg-green-100 hover:bg-green-200 text-green-700 transition-colors"
                             title="View detailed analysis"
                           >
@@ -619,8 +645,8 @@ export default function RedditSentimentAnalyzer() {
                               </div>
                               <div className="flex flex-wrap items-center gap-2 mt-1">
                                 <span className="text-xs px-2 py-1 bg-green-200 text-green-800 rounded-full font-medium">
-                                  {stock.prediction === 'increase' ? '📈 Expected to Increase' : 
-                                   stock.prediction === 'decrease' ? '📉 Expected to Decrease' : '➡️ Neutral'}
+                                  {stock.prediction === 'increase' ? '📈 Expected to Increase' :
+                                    stock.prediction === 'decrease' ? '📉 Expected to Decrease' : '➡️ Neutral'}
                                 </span>
                                 <span className="text-xs text-gray-600">
                                   {(stock.confidence * 100).toFixed(0)}% confidence
@@ -662,8 +688,8 @@ export default function RedditSentimentAnalyzer() {
                     <div className="space-y-3">
                       {results.sentiment.negative_stocks.map((stock, idx) => (
                         <div key={idx} className="border border-red-300 rounded-lg p-3 bg-white relative">
-                          <button 
-                            onClick={() => setSelectedStock({ticker: stock.ticker.replace(/^\$/, '').toUpperCase(), sentiment_score: stock.sentiment_score, prediction: stock.prediction, reasons: stock.reasons, type: 'negative'})}
+                          <button
+                            onClick={() => setSelectedStock({ ticker: stock.ticker.replace(/^\$/, '').toUpperCase(), sentiment_score: stock.sentiment_score, prediction: stock.prediction, reasons: stock.reasons, type: 'negative' })}
                             className="absolute top-2 right-2 p-1.5 rounded-full bg-red-100 hover:bg-red-200 text-red-700 transition-colors"
                             title="View detailed analysis"
                           >
@@ -681,8 +707,8 @@ export default function RedditSentimentAnalyzer() {
                               </div>
                               <div className="flex flex-wrap items-center gap-2 mt-1">
                                 <span className="text-xs px-2 py-1 bg-red-200 text-red-800 rounded-full font-medium">
-                                  {stock.prediction === 'decrease' ? '📉 Expected to Decrease' : 
-                                   stock.prediction === 'increase' ? '📈 Expected to Increase' : '➡️ Neutral'}
+                                  {stock.prediction === 'decrease' ? '📉 Expected to Decrease' :
+                                    stock.prediction === 'increase' ? '📈 Expected to Increase' : '➡️ Neutral'}
                                 </span>
                                 <span className="text-xs text-gray-600">
                                   {(stock.confidence * 100).toFixed(0)}% confidence
