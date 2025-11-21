@@ -154,7 +154,7 @@ export default function SenateTradesDisplay() {
           <p className="text-xs text-gray-500 mt-1 italic">{data.note}</p>
         )}
         <p className="text-sm text-gray-600 mt-2">
-          Showing the latest 10 Congress trades from AInvest API. Data refreshes once per day.
+          Showing the latest 10 Congress trades with amount greater than $25,000 from AInvest API. Data refreshes once per day. Click disclosure links to view official financial disclosure documents.
         </p>
       </div>
 

@@ -73,9 +73,17 @@ function transformAInvestTrade(ainvestTrade: AInvestCongressTrade, ticker: strin
   // Use provided company name or fallback to ticker
   const finalCompanyName = companyName || ticker || 'N/A'
 
+  // Construct disclosure link - link to official Congress financial disclosure search
+  // Senate: https://efdsearch.senate.gov/search/
+  // House: https://disclosures-clerk.house.gov/PublicDisclosure/FinancialDisclosure
+  const senatorName = ainvestTrade.name || 'Unknown Congress Member'
+  // Link to official Senate financial disclosure search (works for Senate members)
+  // For House members, users can search at: https://disclosures-clerk.house.gov/PublicDisclosure/FinancialDisclosure
+  const disclosureLink = `https://efdsearch.senate.gov/search/?q=${encodeURIComponent(senatorName)}`
+
   return {
     filing_date: disclosureDate,
-    senator_name: ainvestTrade.name || 'Unknown Congress Member',
+    senator_name: senatorName,
     ticker: ticker || 'N/A',
     company_name: finalCompanyName,
     asset_description: `${finalCompanyName} Stock`,
@@ -84,7 +92,7 @@ function transformAInvestTrade(ainvestTrade: AInvestCongressTrade, ticker: strin
     amount: numericAmount,
     transaction_date: transactionDate,
     disclosure_date: disclosureDate,
-    ptr_link: '', // AInvest doesn't provide PTR links
+    ptr_link: disclosureLink,
     comment: `${ainvestTrade.party} - ${ainvestTrade.state} | Reporting Gap: ${ainvestTrade.reporting_gap || 'N/A'}`,
   }
 }
@@ -301,9 +309,13 @@ async function fetchLatestSenateTrades(requestOrigin?: string, forceRefresh = fa
       )
     )
 
+    // Filter trades to only show those with amount > $25,000
+    const filteredTrades = uniqueTrades.filter(trade => trade.amount > 25000)
+    console.log(`[Senate Trades] Filtered ${uniqueTrades.length} trades to ${filteredTrades.length} trades with amount > $25,000`)
+
     // Return latest 10 trades
-    const latestTrades = uniqueTrades.slice(0, 10)
-    console.log(`[Senate Trades] Returning latest ${latestTrades.length} unique trades from AInvest API`)
+    const latestTrades = filteredTrades.slice(0, 10)
+    console.log(`[Senate Trades] Returning latest ${latestTrades.length} unique trades from AInvest API (amount > $25,000)`)
 
     return latestTrades
   } catch (error) {
@@ -360,7 +372,7 @@ export async function GET(request: NextRequest) {
       trades,
       lastUpdated: cacheTimestamp ? new Date(cacheTimestamp).toISOString() : new Date().toISOString(),
       note: process.env.AINVEST_API_KEY && process.env.AINVEST_API_KEY !== 'your_ainvest_api_key_here'
-        ? `Real-time data from US Congress financial disclosures via AInvest API. Showing latest 10 trades.${cacheMessage}`
+        ? `Real-time data from US Congress financial disclosures via AInvest API. Showing latest 10 trades with amount > $25,000.${cacheMessage}`
         : 'AINVEST_API_KEY not configured. Please set AINVEST_API_KEY in .env.local to view congressional trading data.',
     }
 
