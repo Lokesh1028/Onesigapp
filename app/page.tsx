@@ -82,7 +82,7 @@ export default function Home() {
           <div className="flex flex-wrap justify-center gap-6 w-full max-w-3xl mx-auto">
             <ComingSoonBox
               title="Retirement Calculator"
-              description="Track your assets in on place, understand your gaps, and build retirement confidence with daily bite-sized learning"
+              description="Track your assets in one place, understand your gaps, and build retirement confidence with daily bite-sized learning"
             />
             <ComingSoonBox
               title="Add Your Portfolio"
