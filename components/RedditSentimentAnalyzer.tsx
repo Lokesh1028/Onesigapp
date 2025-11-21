@@ -827,7 +827,7 @@ export default function RedditSentimentAnalyzer() {
                         </div>
                       </div>
                       <a
-                        href={post.permalink}
+                        href={`https://reddit.com${post.permalink}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="ml-4 text-primary-600 hover:text-primary-800"
