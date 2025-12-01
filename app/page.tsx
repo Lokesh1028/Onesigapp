@@ -53,6 +53,18 @@ export default function Home() {
         </div>
 
         <div className="relative z-10 max-w-5xl w-full text-center space-y-12">
+          {/* Hero Text */}
+          <div className="space-y-6">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tighter leading-tight text-white drop-shadow-lg">
+              See What Insiders, Senators and <br className="hidden md:block" />
+              WallStreetBets Are Trading, <br className="hidden md:block" />
+              along key market stats
+            </h1>
+            <p className="text-lg sm:text-xl text-gray-300 max-w-3xl mx-auto leading-relaxed font-light">
+              Get signals from insider filings, congressional trades and the hottest WSB tickers before the crowd catches on.
+            </p>
+          </div>
+
           {/* Feature Buttons (As requested in image) */}
           <div className="flex flex-wrap justify-center gap-4 w-full">
             <FeatureButton
@@ -77,18 +89,6 @@ export default function Home() {
             </p>
             <EmailSignupForm variant="dark" />
           </div>
-
-          {/* Coming Soon Features */}
-          <div className="flex flex-wrap justify-center gap-6 w-full max-w-3xl mx-auto">
-            <ComingSoonBox
-              title="Retirement Calculator"
-              description="Track your assets in one place, understand your gaps, and build retirement confidence with daily bite-sized learning"
-            />
-            <ComingSoonBox
-              title="Add Your Portfolio"
-              description="Track hot trades, simulate in your play portfolio, and see if the greats like Buffett would approve your strategy."
-            />
-          </div>
         </div>
       </main>
 
@@ -109,28 +109,5 @@ function FeatureButton({ href, label }: { href: string, label: string }) {
     >
       {label}
     </Link>
-  )
-}
-
-function ComingSoonBox({ title, description }: { title: string, description: string }) {
-  return (
-    <div className="flex-1 min-w-[280px] max-w-[400px] bg-gradient-to-br from-[#0f172a]/40 to-[#1e293b]/30 
-                    p-6 rounded-xl border border-gray-700/40 backdrop-blur-sm relative overflow-hidden group
-                    hover:border-purple-500/40 transition-all duration-300">
-      {/* Coming Soon Badge */}
-      <div className="absolute top-3 right-3 px-3 py-1 bg-purple-500/20 border border-purple-400/30 
-                      rounded-full text-xs font-semibold text-purple-300 backdrop-blur-sm">
-        Coming Soon
-      </div>
-      
-      {/* Glow Effect */}
-      <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 
-                      group-hover:opacity-100 transition-opacity duration-300" />
-      
-      <div className="relative space-y-3 mt-8">
-        <h3 className="text-xl font-bold text-white">{title}</h3>
-        <p className="text-sm text-gray-400 leading-relaxed">{description}</p>
-      </div>
-    </div>
   )
 }

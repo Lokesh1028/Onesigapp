@@ -1,491 +1,1585 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+
+// Auth types
+interface AuthState {
+  isLoggedIn: boolean
+  email: string | null
+  isLoading: boolean
+}
+
+// Types
+interface OnboardingData {
+  retirementAge: number
+  desiredMonthlyIncome: number
+}
+
+interface PrimaryHome {
+  id: string
+  address: string
+  purchasePrice: number
+  currentValue: number
+  remainingMortgage: number
+  monthlyMortgagePayment: number
+  yearsLeftToPay: number
+}
+
+interface RentalProperty {
+  id: string
+  address: string
+  purchasePrice: number
+  currentValue: number
+  remainingMortgage: number
+  monthlyMortgagePayment: number
+  yearsLeftToPay: number
+  monthlyRentalIncome: number
+  monthlyExpenses: number // taxes, insurance, maintenance
+}
+
+interface StockHolding {
+  id: string
+  ticker: string
+  shares: number
+  pricePerShare: number
+  totalValue: number
+}
+
+interface CashAsset {
+  id: string
+  type: 'bank' | 'cash' | 'gold' | 'other'
+  description: string
+  value: number
+}
 
 interface CalculatorInputs {
   currentAge: number
-  retirementAge: number
   currentSavings: number
   monthlyContribution: number
   annualReturn: number
-  monthlyExpenses: number
   inflationRate: number
 }
 
 interface CalculatorResults {
   yearsToRetirement: number
-  totalContributions: number
-  projectedSavings: number
-  fireNumber: number
+  totalNeededAtRetirement: number
+  projectedLiquidAssets: number
+  percentOnTrack: number
+  gap: number
   monthlyRetirementIncome: number
-  canRetire: boolean
-  shortfall: number
-  yearsUntilFire: number
+  guidance: string[]
+  
+  // Property breakdown
+  primaryHomeEquity: number
+  rentalPropertyEquity: number
+  totalRentalIncome: number
+  netRentalCashflow: number
+}
+
+// Pie Chart Component
+function PieChart({ 
+  projected, 
+  needed, 
+  percentOnTrack 
+}: { 
+  projected: number
+  needed: number
+  percentOnTrack: number 
+}) {
+  const radius = 80
+  const circumference = 2 * Math.PI * radius
+  const progressOffset = circumference - (Math.min(percentOnTrack, 100) / 100) * circumference
+  const isOnTrack = percentOnTrack >= 100
+
+  return (
+    <div className="relative w-64 h-64 mx-auto">
+      <svg className="w-full h-full transform -rotate-90" viewBox="0 0 200 200">
+        {/* Background circle */}
+        <circle
+          cx="100"
+          cy="100"
+          r={radius}
+          fill="none"
+          stroke="rgba(75, 85, 99, 0.3)"
+          strokeWidth="20"
+        />
+        {/* Progress circle */}
+        <circle
+          cx="100"
+          cy="100"
+          r={radius}
+          fill="none"
+          stroke={isOnTrack ? '#10B981' : '#F59E0B'}
+          strokeWidth="20"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={progressOffset}
+          className="transition-all duration-1000 ease-out"
+        />
+      </svg>
+      {/* Center text */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className={`text-4xl font-bold ${isOnTrack ? 'text-emerald-400' : 'text-amber-400'}`}>
+          {Math.round(percentOnTrack)}%
+        </span>
+        <span className="text-sm text-muted-steel mt-1">On Track</span>
+        {isOnTrack ? (
+          <span className="text-xs text-emerald-400 mt-2">✓ Goal Achievable</span>
+        ) : (
+          <span className="text-xs text-amber-400 mt-2">Needs Adjustment</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Format currency helper
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value)
 }
 
 export default function RetirementCalculator() {
+  // Onboarding state
+  const [showOnboarding, setShowOnboarding] = useState(true)
+  const [onboardingStep, setOnboardingStep] = useState(1)
+  const [onboardingData, setOnboardingData] = useState<OnboardingData>({
+    retirementAge: 65,
+    desiredMonthlyIncome: 5000,
+  })
+
+  // Main calculator inputs
   const [inputs, setInputs] = useState<CalculatorInputs>({
     currentAge: 30,
-    retirementAge: 65,
     currentSavings: 50000,
     monthlyContribution: 1000,
     annualReturn: 7,
-    monthlyExpenses: 5000,
     inflationRate: 3,
   })
 
+  // Property state
+  const [primaryHome, setPrimaryHome] = useState<PrimaryHome | null>(null)
+  const [rentalProperties, setRentalProperties] = useState<RentalProperty[]>([])
+  const [showPropertyModal, setShowPropertyModal] = useState(false)
+  const [propertyModalType, setPropertyModalType] = useState<'primary' | 'rental'>('primary')
+
+  // Stock holdings
+  const [stockHoldings, setStockHoldings] = useState<StockHolding[]>([])
+  const [showStockModal, setShowStockModal] = useState(false)
+
+  // Cash assets
+  const [cashAssets, setCashAssets] = useState<CashAsset[]>([])
+  const [showCashModal, setShowCashModal] = useState(false)
+
+  // Results
   const [results, setResults] = useState<CalculatorResults | null>(null)
 
+  // Active section
+  const [activeSection, setActiveSection] = useState<'overview' | 'properties' | 'stocks' | 'cash'>('overview')
+
+  // Auth state
+  const [auth, setAuth] = useState<AuthState>({ isLoggedIn: false, email: null, isLoading: true })
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+
+  // Check auth status on mount
   useEffect(() => {
-    calculateRetirement()
-  }, [inputs])
+    checkAuthStatus()
+  }, [])
 
-  const calculateRetirement = () => {
-    const {
-      currentAge,
-      retirementAge,
-      currentSavings,
-      monthlyContribution,
-      annualReturn,
-      monthlyExpenses,
-      inflationRate,
-    } = inputs
+  const checkAuthStatus = async () => {
+    try {
+      const res = await fetch('/api/auth')
+      const data = await res.json()
+      if (data.authenticated) {
+        setAuth({ isLoggedIn: true, email: data.user.email, isLoading: false })
+        // Load saved data if available
+        if (data.data) {
+          loadSavedData(data.data)
+        }
+      } else {
+        setAuth({ isLoggedIn: false, email: null, isLoading: false })
+      }
+    } catch {
+      setAuth({ isLoggedIn: false, email: null, isLoading: false })
+    }
+  }
 
-    const yearsToRetirement = retirementAge - currentAge
-    const monthsToRetirement = yearsToRetirement * 12
+  const loadSavedData = (data: any) => {
+    if (data.onboardingData) setOnboardingData(data.onboardingData)
+    if (data.inputs) setInputs(data.inputs)
+    if (data.primaryHome) setPrimaryHome(data.primaryHome)
+    if (data.rentalProperties) setRentalProperties(data.rentalProperties)
+    if (data.stockHoldings) setStockHoldings(data.stockHoldings)
+    if (data.cashAssets) setCashAssets(data.cashAssets)
+    if (data.showOnboarding !== undefined) setShowOnboarding(data.showOnboarding)
+  }
 
-    // Calculate future value of current savings
-    const monthlyReturnRate = annualReturn / 100 / 12
-    const futureValueOfCurrentSavings =
-      currentSavings * Math.pow(1 + annualReturn / 100, yearsToRetirement)
-
-    // Calculate future value of monthly contributions (annuity)
-    let futureValueOfContributions = 0
-    if (monthlyReturnRate > 0) {
-      futureValueOfContributions =
-        monthlyContribution *
-        ((Math.pow(1 + monthlyReturnRate, monthsToRetirement) - 1) /
-          monthlyReturnRate)
-    } else {
-      futureValueOfContributions = monthlyContribution * monthsToRetirement
+  const saveData = async () => {
+    if (!auth.isLoggedIn) {
+      setShowAuthModal(true)
+      return
     }
 
-    const projectedSavings =
-      futureValueOfCurrentSavings + futureValueOfContributions
-
-    // Calculate FIRE number (25x annual expenses using 4% rule)
-    const annualExpenses = monthlyExpenses * 12
-    const fireNumber = annualExpenses * 25
-
-    // Adjust for inflation
-    const futureAnnualExpenses =
-      annualExpenses * Math.pow(1 + inflationRate / 100, yearsToRetirement)
-    const adjustedFireNumber = futureAnnualExpenses * 25
-
-    // Calculate monthly retirement income (4% rule)
-    const monthlyRetirementIncome = (projectedSavings * 0.04) / 12
-
-    // Check if can retire
-    const canRetire = projectedSavings >= adjustedFireNumber
-    const shortfall = Math.max(0, adjustedFireNumber - projectedSavings)
-
-    // Calculate years until FIRE (if not already there)
-    let yearsUntilFire = yearsToRetirement
-    if (!canRetire && monthlyContribution > 0) {
-      // Iterative calculation to find FIRE date
-      let testSavings = currentSavings
-      let testYears = 0
-      const targetFire = adjustedFireNumber
-
-      while (testSavings < targetFire && testYears < 100) {
-        testSavings =
-          testSavings * (1 + annualReturn / 100) +
-          monthlyContribution * 12
-        testYears++
-
-        // Recalculate target with inflation
-        const newTargetFire =
-          annualExpenses *
-          Math.pow(1 + inflationRate / 100, testYears) *
-          25
-
-        if (testSavings >= newTargetFire) {
-          break
-        }
+    setIsSaving(true)
+    setSaveSuccess(false)
+    try {
+      const dataToSave = {
+        onboardingData,
+        inputs,
+        primaryHome,
+        rentalProperties,
+        stockHoldings,
+        cashAssets,
+        showOnboarding,
       }
 
-      yearsUntilFire = testYears
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save', data: dataToSave }),
+      })
+      
+      if (res.ok) {
+        setSaveSuccess(true)
+        setTimeout(() => setSaveSuccess(false), 2000)
+      }
+    } catch (error) {
+      console.error('Failed to save:', error)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'logout' }),
+    })
+    setAuth({ isLoggedIn: false, email: null, isLoading: false })
+  }
+
+  // Calculate totals
+  const stockTotal = stockHoldings.reduce((sum, s) => sum + s.totalValue, 0)
+  const cashTotal = cashAssets.reduce((sum, a) => sum + a.value, 0)
+  
+  // Primary home equity (not counted as liquid)
+  const primaryHomeEquity = primaryHome 
+    ? Math.max(0, primaryHome.currentValue - primaryHome.remainingMortgage)
+    : 0
+
+  // Rental property equity (counted as liquid/investment)
+  const rentalEquity = rentalProperties.reduce((sum, p) => 
+    sum + Math.max(0, p.currentValue - p.remainingMortgage), 0
+  )
+
+  // Net rental cashflow (income - mortgage - expenses)
+  const netRentalCashflow = rentalProperties.reduce((sum, p) => 
+    sum + (p.monthlyRentalIncome - p.monthlyMortgagePayment - p.monthlyExpenses), 0
+  )
+
+  // Total liquid assets (excludes primary home)
+  const totalLiquidAssets = inputs.currentSavings + stockTotal + cashTotal + rentalEquity
+
+  // Calculate retirement projections
+  useEffect(() => {
+    if (showOnboarding) return
+
+    const yearsToRetirement = onboardingData.retirementAge - inputs.currentAge
+    const monthsToRetirement = yearsToRetirement * 12
+
+    if (yearsToRetirement <= 0) {
+      setResults(null)
+      return
+    }
+
+    // Calculate total needed at retirement (25x annual expenses - 4% rule)
+    const annualIncomeNeeded = onboardingData.desiredMonthlyIncome * 12
+    const futureAnnualIncome = annualIncomeNeeded * Math.pow(1 + inputs.inflationRate / 100, yearsToRetirement)
+    const totalNeededAtRetirement = futureAnnualIncome * 25
+
+    // Calculate future value of current liquid savings
+    const monthlyReturnRate = inputs.annualReturn / 100 / 12
+    const futureValueOfSavings = totalLiquidAssets * Math.pow(1 + inputs.annualReturn / 100, yearsToRetirement)
+
+    // Calculate future value of monthly contributions (including rental cashflow)
+    const effectiveMonthlyContribution = inputs.monthlyContribution + Math.max(0, netRentalCashflow)
+    let futureValueOfContributions = 0
+    if (monthlyReturnRate > 0) {
+      futureValueOfContributions = effectiveMonthlyContribution * 
+        ((Math.pow(1 + monthlyReturnRate, monthsToRetirement) - 1) / monthlyReturnRate)
+    } else {
+      futureValueOfContributions = effectiveMonthlyContribution * monthsToRetirement
+    }
+
+    const projectedLiquidAssets = futureValueOfSavings + futureValueOfContributions
+
+    // Calculate percentage on track
+    const percentOnTrack = (projectedLiquidAssets / totalNeededAtRetirement) * 100
+    const gap = Math.max(0, totalNeededAtRetirement - projectedLiquidAssets)
+
+    // Monthly retirement income based on projected savings
+    const monthlyRetirementIncome = (projectedLiquidAssets * 0.04) / 12
+
+    // Generate guidance
+    const guidance: string[] = []
+    if (percentOnTrack < 100) {
+      const additionalMonthlyNeeded = gap / monthsToRetirement / 12
+      guidance.push(`Increase monthly contribution by ${formatCurrency(additionalMonthlyNeeded)} to reach your goal`)
+      
+      if (inputs.annualReturn < 10) {
+        guidance.push('Consider higher-return investments (with appropriate risk tolerance)')
+      }
+      
+      if (rentalProperties.length === 0) {
+        guidance.push('Rental properties could provide additional passive income')
+      }
+    } else {
+      guidance.push('Great job! You\'re on track to meet your retirement goals')
+      if (percentOnTrack > 120) {
+        guidance.push('You may be able to retire earlier or increase your retirement lifestyle')
+      }
     }
 
     setResults({
       yearsToRetirement,
-      totalContributions: monthlyContribution * monthsToRetirement,
-      projectedSavings,
-      fireNumber: adjustedFireNumber,
+      totalNeededAtRetirement,
+      projectedLiquidAssets,
+      percentOnTrack,
+      gap,
       monthlyRetirementIncome,
-      canRetire,
-      shortfall,
-      yearsUntilFire: Math.min(yearsUntilFire, yearsToRetirement),
+      guidance,
+      primaryHomeEquity,
+      rentalPropertyEquity: rentalEquity,
+      totalRentalIncome: rentalProperties.reduce((sum, p) => sum + p.monthlyRentalIncome, 0),
+      netRentalCashflow,
     })
-  }
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value)
-  }
+  }, [inputs, onboardingData, totalLiquidAssets, netRentalCashflow, primaryHomeEquity, rentalEquity, rentalProperties, showOnboarding])
 
   const handleInputChange = (field: keyof CalculatorInputs, value: number) => {
-    setInputs((prev) => ({
-      ...prev,
-      [field]: value,
-    }))
+    setInputs(prev => ({ ...prev, [field]: value }))
   }
 
+  const addStockHolding = (holding: Omit<StockHolding, 'id' | 'totalValue'>) => {
+    const totalValue = holding.shares * holding.pricePerShare
+    setStockHoldings(prev => [...prev, { ...holding, id: `stock-${Date.now()}`, totalValue }])
+  }
+
+  const removeStockHolding = (id: string) => {
+    setStockHoldings(prev => prev.filter(s => s.id !== id))
+  }
+
+  const addCashAsset = (asset: Omit<CashAsset, 'id'>) => {
+    setCashAssets(prev => [...prev, { ...asset, id: `cash-${Date.now()}` }])
+  }
+
+  const removeCashAsset = (id: string) => {
+    setCashAssets(prev => prev.filter(c => c.id !== id))
+  }
+
+  const completeOnboarding = () => {
+    setShowOnboarding(false)
+  }
+
+  // Onboarding Flow
+  if (showOnboarding) {
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 lg:p-8">
-      <div className="mb-6">
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-          Retirement Calculator
-        </h2>
-        <p className="text-gray-600">
-          Calculate your path to financial freedom and determine when you can
-          retire comfortably
-        </p>
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-gradient-to-br from-signal-violet/20 to-data-blue/20 rounded-2xl border border-gunmetal p-8">
+          {/* Progress */}
+          <div className="flex items-center justify-center gap-3 mb-8">
+            {[1, 2, 3].map((step) => (
+              <div
+                key={step}
+                className={`w-3 h-3 rounded-full transition-colors ${
+                  step <= onboardingStep ? 'bg-signal-violet' : 'bg-gunmetal'
+                }`}
+              />
+            ))}
+          </div>
+
+          {onboardingStep === 1 && (
+            <div className="text-center space-y-6">
+              <div className="text-6xl mb-4">🎯</div>
+              <h2 className="text-2xl font-bold text-white">Welcome to Your Retirement Planner</h2>
+              <p className="text-muted-steel">
+                Let's set up your personalized retirement plan in just a few steps.
+              </p>
+              <button
+                onClick={() => setOnboardingStep(2)}
+                className="px-8 py-4 bg-signal-violet hover:bg-signal-violet/80 text-white font-semibold rounded-xl transition-colors"
+              >
+                Get Started →
+              </button>
+          </div>
+          )}
+
+          {onboardingStep === 2 && (
+        <div className="space-y-6">
+              <div className="text-center mb-8">
+                <div className="text-5xl mb-4">🏖️</div>
+                <h2 className="text-2xl font-bold text-white">When do you want to retire?</h2>
+                <p className="text-muted-steel mt-2">Set your target retirement age</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Input Section */}
-        <div className="space-y-6">
-          <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">
-            Your Information
-          </h3>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Current Age
+              <div className="space-y-4">
+                <label className="block text-sm font-medium text-muted-steel">
+                  Your Current Age
             </label>
             <input
               type="number"
               min="18"
               max="100"
               value={inputs.currentAge}
-              onChange={(e) =>
-                handleInputChange('currentAge', parseInt(e.target.value) || 0)
-              }
-              className="input-field"
+                  onChange={(e) => handleInputChange('currentAge', parseInt(e.target.value) || 0)}
+                  className="w-full px-4 py-4 bg-gunmetal border border-gray-600 rounded-xl text-white text-xl text-center font-semibold focus:outline-none focus:ring-2 focus:ring-signal-violet"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <div className="space-y-4">
+                <label className="block text-sm font-medium text-muted-steel">
               Desired Retirement Age
             </label>
             <input
               type="number"
-              min={inputs.currentAge}
+                  min={inputs.currentAge + 1}
               max="100"
-              value={inputs.retirementAge}
-              onChange={(e) =>
-                handleInputChange(
-                  'retirementAge',
-                  parseInt(e.target.value) || 0
-                )
-              }
-              className="input-field"
-            />
+                  value={onboardingData.retirementAge}
+                  onChange={(e) => setOnboardingData(prev => ({ 
+                    ...prev, 
+                    retirementAge: parseInt(e.target.value) || 65 
+                  }))}
+                  className="w-full px-4 py-4 bg-gunmetal border border-gray-600 rounded-xl text-white text-xl text-center font-semibold focus:outline-none focus:ring-2 focus:ring-signal-violet"
+                />
+                <p className="text-center text-muted-steel">
+                  That's <span className="text-signal-violet font-semibold">
+                    {onboardingData.retirementAge - inputs.currentAge} years
+                  </span> from now
+                </p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Current Savings
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                $
-              </span>
-              <input
-                type="number"
-                min="0"
-                value={inputs.currentSavings}
-                onChange={(e) =>
-                  handleInputChange(
-                    'currentSavings',
-                    parseFloat(e.target.value) || 0
-                  )
-                }
-                className="input-field pl-8"
-              />
+              <div className="flex gap-4 pt-4">
+                <button
+                  onClick={() => setOnboardingStep(1)}
+                  className="flex-1 px-6 py-3 bg-gunmetal hover:bg-gunmetal/80 text-white font-medium rounded-xl transition-colors"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={() => setOnboardingStep(3)}
+                  className="flex-1 px-6 py-3 bg-signal-violet hover:bg-signal-violet/80 text-white font-semibold rounded-xl transition-colors"
+                >
+                  Next →
+                </button>
+              </div>
             </div>
+          )}
+
+          {onboardingStep === 3 && (
+            <div className="space-y-6">
+              <div className="text-center mb-8">
+                <div className="text-5xl mb-4">💰</div>
+                <h2 className="text-2xl font-bold text-white">How much monthly income do you need?</h2>
+                <p className="text-muted-steel mt-2">This is your desired spending in retirement</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Monthly Contribution
+              <div className="space-y-4">
+                <label className="block text-sm font-medium text-muted-steel">
+                  Desired Monthly Income in Retirement
             </label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                $
-              </span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-steel text-xl">$</span>
               <input
                 type="number"
-                min="0"
-                value={inputs.monthlyContribution}
-                onChange={(e) =>
-                  handleInputChange(
-                    'monthlyContribution',
-                    parseFloat(e.target.value) || 0
-                  )
-                }
-                className="input-field pl-8"
+                    min="1000"
+                    step="500"
+                    value={onboardingData.desiredMonthlyIncome}
+                    onChange={(e) => setOnboardingData(prev => ({ 
+                      ...prev, 
+                      desiredMonthlyIncome: parseInt(e.target.value) || 5000 
+                    }))}
+                    className="w-full pl-10 pr-4 py-4 bg-gunmetal border border-gray-600 rounded-xl text-white text-xl text-center font-semibold focus:outline-none focus:ring-2 focus:ring-signal-violet"
               />
             </div>
+                <p className="text-center text-muted-steel">
+                  Annual: <span className="text-emerald-400 font-semibold">
+                    {formatCurrency(onboardingData.desiredMonthlyIncome * 12)}
+                  </span>
+                </p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Expected Annual Return (%)
-            </label>
-            <div className="relative">
-              <input
-                type="number"
-                min="0"
-                max="20"
-                step="0.1"
-                value={inputs.annualReturn}
-                onChange={(e) =>
-                  handleInputChange(
-                    'annualReturn',
-                    parseFloat(e.target.value) || 0
-                  )
-                }
-                className="input-field"
-              />
-              <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                %
-              </span>
+              {/* Quick presets */}
+              <div className="grid grid-cols-3 gap-3">
+                {[3000, 5000, 8000, 10000, 15000, 20000].map((amount) => (
+                  <button
+                    key={amount}
+                    onClick={() => setOnboardingData(prev => ({ ...prev, desiredMonthlyIncome: amount }))}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      onboardingData.desiredMonthlyIncome === amount
+                        ? 'bg-signal-violet text-white'
+                        : 'bg-gunmetal text-muted-steel hover:text-white'
+                    }`}
+                  >
+                    {formatCurrency(amount)}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  onClick={() => setOnboardingStep(2)}
+                  className="flex-1 px-6 py-3 bg-gunmetal hover:bg-gunmetal/80 text-white font-medium rounded-xl transition-colors"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={completeOnboarding}
+                  className="flex-1 px-6 py-3 bg-emerald-600 hover:bg-emerald-600/80 text-white font-semibold rounded-xl transition-colors"
+                >
+                  Start Planning ✓
+                </button>
+              </div>
             </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Historical S&P 500 average: ~10% (use 7% for conservative)
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Main Calculator View
+  return (
+    <div className="space-y-6">
+      {/* Header Summary */}
+      <div className="bg-gradient-to-r from-signal-violet/20 to-data-blue/20 rounded-2xl border border-gunmetal p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-white">Your Retirement Plan</h2>
+            <p className="text-muted-steel">
+              Retire at {onboardingData.retirementAge} with {formatCurrency(onboardingData.desiredMonthlyIncome)}/month
             </p>
+            </div>
+          <div className="flex items-center gap-3">
+            {/* Save Button */}
+            <button
+              onClick={saveData}
+              disabled={isSaving}
+              className={`px-4 py-2 ${saveSuccess ? 'bg-green-500' : 'bg-emerald-600 hover:bg-emerald-600/80'} disabled:bg-emerald-600/50 text-white rounded-lg transition-colors text-sm flex items-center gap-2`}
+            >
+              {isSaving ? (
+                <>
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Saving...
+                </>
+              ) : saveSuccess ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Saved!
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                  </svg>
+                  Save
+                </>
+              )}
+            </button>
+
+            {/* Auth Button */}
+            {auth.isLoggedIn ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-steel">{auth.email}</span>
+                <button
+                  onClick={handleLogout}
+                  className="px-3 py-2 bg-gunmetal hover:bg-gunmetal/80 text-muted-steel hover:text-white rounded-lg transition-colors text-sm"
+                >
+                  Logout
+                </button>
+          </div>
+            ) : (
+              <button
+                onClick={() => setShowAuthModal(true)}
+                className="px-4 py-2 bg-signal-violet hover:bg-signal-violet/80 text-white rounded-lg transition-colors text-sm"
+              >
+                Sign In
+              </button>
+            )}
+
+            <button
+              onClick={() => setShowOnboarding(true)}
+              className="px-4 py-2 bg-gunmetal hover:bg-gunmetal/80 text-muted-steel hover:text-white rounded-lg transition-colors text-sm"
+            >
+              Edit Goals
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Inputs */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* Quick Stats */}
+          <div className="bg-gunmetal/30 rounded-xl border border-gunmetal p-5">
+            <h3 className="text-sm font-medium text-muted-steel mb-4">Current Assets</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-steel">Liquid Savings</span>
+                <span className="font-semibold text-white">{formatCurrency(inputs.currentSavings)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-steel">Stocks</span>
+                <span className="font-semibold text-white">{formatCurrency(stockTotal)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-steel">Cash Assets</span>
+                <span className="font-semibold text-white">{formatCurrency(cashTotal)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-steel">Rental Equity</span>
+                <span className="font-semibold text-white">{formatCurrency(rentalEquity)}</span>
+              </div>
+              <div className="pt-3 border-t border-gunmetal flex justify-between items-center">
+                <span className="text-white font-medium">Total Liquid</span>
+                <span className="font-bold text-emerald-400 text-lg">{formatCurrency(totalLiquidAssets)}</span>
+              </div>
+              {primaryHome && (
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-muted-steel">Home Equity (non-liquid)</span>
+                  <span className="text-muted-steel">{formatCurrency(primaryHomeEquity)}</span>
+                </div>
+              )}
+            </div>
           </div>
 
+          {/* Monthly Inputs */}
+          <div className="bg-gunmetal/30 rounded-xl border border-gunmetal p-5 space-y-4">
+            <h3 className="text-sm font-medium text-muted-steel">Monthly Inputs</h3>
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Monthly Expenses in Retirement
-            </label>
+              <label className="block text-xs text-muted-steel mb-1">Current Savings</label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                $
-              </span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel">$</span>
               <input
                 type="number"
-                min="0"
-                value={inputs.monthlyExpenses}
-                onChange={(e) =>
-                  handleInputChange(
-                    'monthlyExpenses',
-                    parseFloat(e.target.value) || 0
-                  )
-                }
-                className="input-field pl-8"
+                  value={inputs.currentSavings}
+                  onChange={(e) => handleInputChange('currentSavings', parseFloat(e.target.value) || 0)}
+                  className="w-full pl-7 pr-4 py-2 bg-abyssal-blue border border-gunmetal rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-signal-violet"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Expected Inflation Rate (%)
-            </label>
+              <label className="block text-xs text-muted-steel mb-1">Monthly Contribution</label>
             <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel">$</span>
               <input
                 type="number"
-                min="0"
-                max="10"
-                step="0.1"
-                value={inputs.inflationRate}
-                onChange={(e) =>
-                  handleInputChange(
-                    'inflationRate',
-                    parseFloat(e.target.value) || 0
-                  )
-                }
-                className="input-field"
+                  value={inputs.monthlyContribution}
+                  onChange={(e) => handleInputChange('monthlyContribution', parseFloat(e.target.value) || 0)}
+                  className="w-full pl-7 pr-4 py-2 bg-abyssal-blue border border-gunmetal rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-signal-violet"
               />
-              <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                %
-              </span>
             </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Historical average: ~3%
+              {netRentalCashflow > 0 && (
+                <p className="text-xs text-emerald-400 mt-1">
+                  +{formatCurrency(netRentalCashflow)}/mo from rentals
+            </p>
+              )}
+          </div>
+
+          <div>
+              <label className="block text-xs text-muted-steel mb-1">Expected Annual Return</label>
+              <div className="flex gap-2">
+                {[4, 7, 10].map((rate) => (
+                  <button
+                    key={rate}
+                    onClick={() => handleInputChange('annualReturn', rate)}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      inputs.annualReturn === rate
+                        ? 'bg-signal-violet text-white'
+                        : 'bg-abyssal-blue text-muted-steel hover:text-white border border-gunmetal'
+                    }`}
+                  >
+                    {rate}%
+                  </button>
+                ))}
+            </div>
+            <p className="text-xs text-muted-steel mt-1">
+                {inputs.annualReturn <= 4 ? 'Conservative' : inputs.annualReturn <= 7 ? 'Moderate' : 'Aggressive'}
             </p>
           </div>
         </div>
 
-        {/* Results Section */}
-        <div className="space-y-6">
-          <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">
-            Your Retirement Projection
-          </h3>
+          {/* Property Quick Access */}
+          <div className="bg-gunmetal/30 rounded-xl border border-gunmetal p-5 space-y-3">
+            <h3 className="text-sm font-medium text-muted-steel">Properties</h3>
+            
+            {/* Primary Home */}
+            {primaryHome ? (
+              <div className="bg-abyssal-blue rounded-lg p-3 border border-gunmetal">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span>🏠</span>
+                    <span className="text-white text-sm font-medium">Primary Home</span>
+                  </div>
+                  <span className="text-emerald-400 font-semibold">{formatCurrency(primaryHomeEquity)}</span>
+                </div>
+                <p className="text-xs text-muted-steel mt-1">Equity (non-liquid)</p>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setPropertyModalType('primary')
+                  setShowPropertyModal(true)
+                }}
+                className="w-full py-3 border-2 border-dashed border-gunmetal rounded-lg text-muted-steel hover:border-signal-violet hover:text-white transition-colors text-sm"
+              >
+                + Add Primary Home
+              </button>
+            )}
 
+            {/* Rental Properties */}
+            {rentalProperties.length > 0 ? (
+              <div className="space-y-2">
+                {rentalProperties.map((rental) => (
+                  <div key={rental.id} className="bg-abyssal-blue rounded-lg p-3 border border-gunmetal">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span>🏢</span>
+                        <span className="text-white text-sm font-medium truncate max-w-32">{rental.address}</span>
+                      </div>
+                      <span className="text-blue-400 font-semibold">{formatCurrency(rental.currentValue - rental.remainingMortgage)}</span>
+            </div>
+                    <p className="text-xs text-emerald-400 mt-1">
+                      +{formatCurrency(rental.monthlyRentalIncome - rental.monthlyMortgagePayment - rental.monthlyExpenses)}/mo cashflow
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            
+            <button
+              onClick={() => {
+                setPropertyModalType('rental')
+                setShowPropertyModal(true)
+              }}
+              className="w-full py-2 bg-gunmetal hover:bg-gunmetal/80 rounded-lg text-muted-steel hover:text-white transition-colors text-sm"
+            >
+              + Add Rental Property
+            </button>
+          </div>
+
+          {/* Stocks */}
+          <div className="bg-gunmetal/30 rounded-xl border border-gunmetal p-5 space-y-3">
+            <h3 className="text-sm font-medium text-muted-steel">Stocks</h3>
+            {stockHoldings.length > 0 ? (
+              <div className="space-y-2">
+                {stockHoldings.map((stock) => (
+                  <div key={stock.id} className="bg-abyssal-blue rounded-lg p-3 border border-gunmetal flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-white font-semibold uppercase tracking-tight">{stock.ticker}</p>
+                      <p className="text-xs text-muted-steel">
+                        {stock.shares} shares @ {formatCurrency(stock.pricePerShare)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-emerald-400 font-semibold">{formatCurrency(stock.totalValue)}</span>
+                      <button
+                        onClick={() => removeStockHolding(stock.id)}
+                        className="text-muted-steel hover:text-red-400 transition-colors"
+                        aria-label="Remove stock"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-steel">No stocks added yet.</p>
+            )}
+            <button
+              onClick={() => setShowStockModal(true)}
+              className="w-full py-2 bg-gunmetal hover:bg-gunmetal/80 rounded-lg text-muted-steel hover:text-white transition-colors text-sm"
+            >
+              + Add Stock
+            </button>
+          </div>
+
+          {/* Cash Assets */}
+          <div className="bg-gunmetal/30 rounded-xl border border-gunmetal p-5 space-y-3">
+            <h3 className="text-sm font-medium text-muted-steel">Cash Assets</h3>
+            {cashAssets.length > 0 ? (
+              <div className="space-y-2">
+                {cashAssets.map((asset) => (
+                  <div key={asset.id} className="bg-abyssal-blue rounded-lg p-3 border border-gunmetal flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-white font-semibold capitalize">{asset.type}</p>
+                      <p className="text-xs text-muted-steel">{asset.description}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-emerald-400 font-semibold">{formatCurrency(asset.value)}</span>
+                      <button
+                        onClick={() => removeCashAsset(asset.id)}
+                        className="text-muted-steel hover:text-red-400 transition-colors"
+                        aria-label="Remove cash asset"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-steel">No cash assets added yet.</p>
+            )}
+            <button
+              onClick={() => setShowCashModal(true)}
+              className="w-full py-2 bg-gunmetal hover:bg-gunmetal/80 rounded-lg text-muted-steel hover:text-white transition-colors text-sm"
+            >
+              + Add Cash Asset
+            </button>
+          </div>
+        </div>
+
+        {/* Right Column - Results with Pie Chart */}
+        <div className="lg:col-span-2 space-y-6">
           {results && (
             <>
-              {/* FIRE Status */}
-              <div
-                className={`rounded-lg p-4 border-2 ${
-                  results.canRetire
-                    ? 'bg-green-50 border-green-200'
-                    : 'bg-yellow-50 border-yellow-200'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold text-gray-900">
-                    Financial Freedom Status
-                  </span>
-                  {results.canRetire ? (
-                    <span className="px-3 py-1 bg-green-600 text-white text-sm font-semibold rounded-full">
-                      ✓ On Track
-                    </span>
-                  ) : (
-                    <span className="px-3 py-1 bg-yellow-600 text-white text-sm font-semibold rounded-full">
-                      Needs Work
-                    </span>
+              {/* Main Visualization */}
+              <div className="bg-gunmetal/30 rounded-2xl border border-gunmetal p-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                  {/* Pie Chart */}
+                  <PieChart
+                    projected={results.projectedLiquidAssets}
+                    needed={results.totalNeededAtRetirement}
+                    percentOnTrack={results.percentOnTrack}
+                  />
+
+                  {/* Key Numbers */}
+                  <div className="space-y-4">
+                    <div className="bg-abyssal-blue rounded-xl p-4 border border-gunmetal">
+                      <div className="text-xs text-muted-steel mb-1">Total Needed at Retirement</div>
+                      <div className="text-2xl font-bold text-white">
+                        {formatCurrency(results.totalNeededAtRetirement)}
+                      </div>
+                      <div className="text-xs text-muted-steel">Based on 4% withdrawal rate</div>
+                    </div>
+
+                    <div className="bg-abyssal-blue rounded-xl p-4 border border-gunmetal">
+                      <div className="text-xs text-muted-steel mb-1">Projected at Retirement</div>
+                      <div className={`text-2xl font-bold ${results.percentOnTrack >= 100 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        {formatCurrency(results.projectedLiquidAssets)}
+                      </div>
+                      <div className="text-xs text-muted-steel">In {results.yearsToRetirement} years</div>
+                    </div>
+
+                    {results.gap > 0 && (
+                      <div className="bg-red-900/20 rounded-xl p-4 border border-red-500/30">
+                        <div className="text-xs text-red-300 mb-1">Gap to Target</div>
+                        <div className="text-2xl font-bold text-red-400">
+                          {formatCurrency(results.gap)}
+                        </div>
+                      </div>
                   )}
                 </div>
-                {results.canRetire ? (
-                  <p className="text-sm text-gray-700">
-                    You're projected to reach your FIRE number by retirement
-                    age!
-                  </p>
-                ) : (
-                  <p className="text-sm text-gray-700">
-                    You'll need {formatCurrency(results.shortfall)} more to
-                    reach financial freedom.
+                </div>
+              </div>
+
+              {/* Monthly Income Projection */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gradient-to-br from-emerald-900/30 to-emerald-900/10 rounded-xl p-5 border border-emerald-500/30">
+                  <div className="text-emerald-300 text-sm mb-1">Projected Monthly Income</div>
+                  <div className="text-3xl font-bold text-emerald-400">
+                    {formatCurrency(results.monthlyRetirementIncome)}
+                  </div>
+                  <div className="text-emerald-300/60 text-xs mt-1">Using 4% rule</div>
+                </div>
+
+                <div className={`rounded-xl p-5 border ${
+                  results.monthlyRetirementIncome >= onboardingData.desiredMonthlyIncome
+                    ? 'bg-gradient-to-br from-blue-900/30 to-blue-900/10 border-blue-500/30'
+                    : 'bg-gradient-to-br from-amber-900/30 to-amber-900/10 border-amber-500/30'
+                }`}>
+                  <div className={`text-sm mb-1 ${
+                    results.monthlyRetirementIncome >= onboardingData.desiredMonthlyIncome
+                      ? 'text-blue-300' : 'text-amber-300'
+                  }`}>Your Goal</div>
+                  <div className={`text-3xl font-bold ${
+                    results.monthlyRetirementIncome >= onboardingData.desiredMonthlyIncome
+                      ? 'text-blue-400' : 'text-amber-400'
+                  }`}>
+                    {formatCurrency(onboardingData.desiredMonthlyIncome)}
+                  </div>
+                  <div className={`text-xs mt-1 ${
+                    results.monthlyRetirementIncome >= onboardingData.desiredMonthlyIncome
+                      ? 'text-blue-300/60' : 'text-amber-300/60'
+                  }`}>
+                    {results.monthlyRetirementIncome >= onboardingData.desiredMonthlyIncome
+                      ? '✓ Goal achieved!' : `${formatCurrency(onboardingData.desiredMonthlyIncome - results.monthlyRetirementIncome)} short`}
+                  </div>
+                </div>
+              </div>
+
+              {/* Guidance */}
+              <div className="bg-gunmetal/30 rounded-xl border border-gunmetal p-5">
+                <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
+                  <span>💡</span> Recommendations
+                </h3>
+                <ul className="space-y-2">
+                  {results.guidance.map((tip, idx) => (
+                    <li key={idx} className={`text-sm flex items-start gap-2 ${
+                      results.percentOnTrack >= 100 ? 'text-emerald-300' : 'text-amber-300'
+                    }`}>
+                      <span>{results.percentOnTrack >= 100 ? '✓' : '→'}</span>
+                      {tip}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Disclaimer */}
+              <div className="bg-amber-900/20 border border-amber-500/30 rounded-xl p-4">
+                <p className="text-xs text-amber-200/80">
+                  <strong>Disclaimer:</strong> This calculator provides estimates based on your inputs. 
+                  Results are for informational purposes only and should not be considered financial advice. 
+                  Consult with a qualified financial advisor for personalized recommendations.
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Property Modal */}
+      {showPropertyModal && (
+        <PropertyModal
+          type={propertyModalType}
+          onClose={() => setShowPropertyModal(false)}
+          onSave={(property) => {
+            if (propertyModalType === 'primary') {
+              setPrimaryHome(property as PrimaryHome)
+            } else {
+              setRentalProperties(prev => [...prev, property as RentalProperty])
+            }
+            setShowPropertyModal(false)
+          }}
+        />
+      )}
+
+      {/* Stock Modal */}
+      {showStockModal && (
+        <StockModal
+          onClose={() => setShowStockModal(false)}
+          onSave={(stock) => {
+            addStockHolding(stock)
+            setShowStockModal(false)
+          }}
+        />
+      )}
+
+      {/* Cash Asset Modal */}
+      {showCashModal && (
+        <CashAssetModal
+          onClose={() => setShowCashModal(false)}
+          onSave={(asset) => {
+            addCashAsset(asset)
+            setShowCashModal(false)
+          }}
+        />
+      )}
+
+      {/* Auth Modal */}
+      {showAuthModal && (
+        <AuthModal
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={(email, data) => {
+            setAuth({ isLoggedIn: true, email, isLoading: false })
+            if (data) loadSavedData(data)
+            setShowAuthModal(false)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// Property Modal Component
+function PropertyModal({
+  type,
+  onClose,
+  onSave,
+}: {
+  type: 'primary' | 'rental'
+  onClose: () => void
+  onSave: (property: PrimaryHome | RentalProperty) => void
+}) {
+  const [formData, setFormData] = useState({
+    address: '',
+    purchasePrice: 0,
+    currentValue: 0,
+    remainingMortgage: 0,
+    monthlyMortgagePayment: 0,
+    yearsLeftToPay: 0,
+    monthlyRentalIncome: 0,
+    monthlyExpenses: 0,
+  })
+
+  const handleSave = () => {
+    if (!formData.address.trim()) return
+
+    const baseProperty = {
+      id: `${type}-${Date.now()}`,
+      address: formData.address,
+      purchasePrice: formData.purchasePrice,
+      currentValue: formData.currentValue,
+      remainingMortgage: formData.remainingMortgage,
+      monthlyMortgagePayment: formData.monthlyMortgagePayment,
+      yearsLeftToPay: formData.yearsLeftToPay,
+    }
+
+    if (type === 'rental') {
+      onSave({
+        ...baseProperty,
+        monthlyRentalIncome: formData.monthlyRentalIncome,
+        monthlyExpenses: formData.monthlyExpenses,
+      } as RentalProperty)
+    } else {
+      onSave(baseProperty as PrimaryHome)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-abyssal-blue rounded-2xl border border-gunmetal w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gunmetal">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-white">
+              {type === 'primary' ? '🏠 Add Primary Home' : '🏢 Add Rental Property'}
+            </h2>
+            <button onClick={onClose} className="p-2 hover:bg-gunmetal rounded-lg transition-colors">
+              <svg className="w-5 h-5 text-muted-steel" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          {type === 'primary' && (
+            <p className="text-sm text-muted-steel mt-2">
+              Primary home equity is tracked separately (non-liquid asset)
+            </p>
+          )}
+          {type === 'rental' && (
+            <p className="text-sm text-muted-steel mt-2">
+              Rental properties count toward your liquid/investment assets
                   </p>
                 )}
               </div>
 
-              {/* Key Metrics */}
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm text-muted-steel mb-1">Property Address</label>
+            <input
+              type="text"
+              value={formData.address}
+              onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+              placeholder="123 Main St, City, State"
+              className="w-full px-4 py-3 bg-gunmetal border border-gray-600 rounded-lg text-white placeholder-muted-steel focus:outline-none focus:ring-2 focus:ring-signal-violet"
+            />
+          </div>
+
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                  <div className="text-xs text-blue-600 font-medium mb-1">
-                    Years to Retirement
-                  </div>
-                  <div className="text-2xl font-bold text-blue-900">
-                    {results.yearsToRetirement}
-                  </div>
-                </div>
-
-                <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                  <div className="text-xs text-purple-600 font-medium mb-1">
-                    FIRE Number
-                  </div>
-                  <div className="text-lg font-bold text-purple-900">
-                    {formatCurrency(results.fireNumber)}
+            <div>
+              <label className="block text-sm text-muted-steel mb-1">Purchase Price</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel">$</span>
+                <input
+                  type="number"
+                  value={formData.purchasePrice || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, purchasePrice: parseFloat(e.target.value) || 0 }))}
+                  className="w-full pl-7 pr-4 py-3 bg-gunmetal border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-signal-violet"
+                />
                   </div>
                 </div>
 
-                <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                  <div className="text-xs text-green-600 font-medium mb-1">
-                    Projected Savings
+            <div>
+              <label className="block text-sm text-muted-steel mb-1">Current Value</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel">$</span>
+                <input
+                  type="number"
+                  value={formData.currentValue || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, currentValue: parseFloat(e.target.value) || 0 }))}
+                  className="w-full pl-7 pr-4 py-3 bg-gunmetal border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-signal-violet"
+                />
                   </div>
-                  <div className="text-lg font-bold text-green-900">
-                    {formatCurrency(results.projectedSavings)}
                   </div>
                 </div>
 
-                <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
-                  <div className="text-xs text-orange-600 font-medium mb-1">
-                    Monthly Income
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-muted-steel mb-1">Remaining Mortgage</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel">$</span>
+                <input
+                  type="number"
+                  value={formData.remainingMortgage || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, remainingMortgage: parseFloat(e.target.value) || 0 }))}
+                  className="w-full pl-7 pr-4 py-3 bg-gunmetal border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-signal-violet"
+                />
                   </div>
-                  <div className="text-lg font-bold text-orange-900">
-                    {formatCurrency(results.monthlyRetirementIncome)}
+            </div>
+
+            <div>
+              <label className="block text-sm text-muted-steel mb-1">Monthly Payment</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel">$</span>
+                <input
+                  type="number"
+                  value={formData.monthlyMortgagePayment || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, monthlyMortgagePayment: parseFloat(e.target.value) || 0 }))}
+                  className="w-full pl-7 pr-4 py-3 bg-gunmetal border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-signal-violet"
+                />
+              </div>
+                  </div>
+                </div>
+
+          <div>
+            <label className="block text-sm text-muted-steel mb-1">Years Left to Pay</label>
+            <input
+              type="number"
+              value={formData.yearsLeftToPay || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, yearsLeftToPay: parseInt(e.target.value) || 0 }))}
+              className="w-full px-4 py-3 bg-gunmetal border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-signal-violet"
+            />
+                  </div>
+
+          {type === 'rental' && (
+            <>
+              <div className="pt-4 border-t border-gunmetal">
+                <h3 className="text-sm font-medium text-white mb-3">Rental Income</h3>
+                  </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-muted-steel mb-1">Monthly Rental Income</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel">$</span>
+                    <input
+                      type="number"
+                      value={formData.monthlyRentalIncome || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, monthlyRentalIncome: parseFloat(e.target.value) || 0 }))}
+                      className="w-full pl-7 pr-4 py-3 bg-gunmetal border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-signal-violet"
+                    />
+                </div>
+              </div>
+
+                <div>
+                  <label className="block text-sm text-muted-steel mb-1">Monthly Expenses</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel">$</span>
+                    <input
+                      type="number"
+                      value={formData.monthlyExpenses || ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, monthlyExpenses: parseFloat(e.target.value) || 0 }))}
+                      placeholder="taxes, insurance, etc"
+                      className="w-full pl-7 pr-4 py-3 bg-gunmetal border border-gray-600 rounded-lg text-white placeholder-muted-steel focus:outline-none focus:ring-2 focus:ring-signal-violet"
+                    />
                   </div>
                 </div>
               </div>
 
-              {/* Detailed Breakdown */}
-              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                <h4 className="font-semibold text-gray-900 mb-3">
-                  Breakdown
-                </h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Total Contributions:</span>
-                    <span className="font-medium text-gray-900">
-                      {formatCurrency(results.totalContributions)}
+              {formData.monthlyRentalIncome > 0 && (
+                <div className="bg-emerald-900/20 rounded-lg p-3 border border-emerald-500/30">
+                  <div className="text-sm text-emerald-300">
+                    Net Monthly Cashflow: <span className="font-bold">
+                      {formatCurrency(formData.monthlyRentalIncome - formData.monthlyMortgagePayment - formData.monthlyExpenses)}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Growth from Returns:</span>
-                    <span className="font-medium text-gray-900">
-                      {formatCurrency(
-                        results.projectedSavings -
-                          inputs.currentSavings -
-                          results.totalContributions
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex justify-between pt-2 border-t border-gray-300">
-                    <span className="text-gray-900 font-semibold">
-                      Projected Total:
-                    </span>
-                    <span className="font-bold text-gray-900">
-                      {formatCurrency(results.projectedSavings)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* FIRE Timeline */}
-              {!results.canRetire && results.yearsUntilFire < results.yearsToRetirement && (
-                <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
-                  <h4 className="font-semibold text-gray-900 mb-2">
-                    🎯 FIRE Timeline
-                  </h4>
-                  <p className="text-sm text-gray-700">
-                    At your current savings rate, you could reach financial
-                    freedom in approximately{' '}
-                    <span className="font-bold text-indigo-900">
-                      {results.yearsUntilFire} years
-                    </span>{' '}
-                    (age {inputs.currentAge + results.yearsUntilFire}).
-                  </p>
                 </div>
               )}
-
-              {/* Insights */}
-              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                <h4 className="font-semibold text-gray-900 mb-2">💡 Insights</h4>
-                <ul className="space-y-1 text-sm text-gray-700">
-                  <li>
-                    • Your monthly retirement income would be{' '}
-                    <span className="font-semibold">
-                      {formatCurrency(results.monthlyRetirementIncome)}
-                    </span>{' '}
-                    (using the 4% rule)
-                  </li>
-                  {results.monthlyRetirementIncome < inputs.monthlyExpenses && (
-                    <li className="text-orange-700">
-                      • Consider increasing contributions or adjusting retirement
-                      age to meet your expense goals
-                    </li>
-                  )}
-                  {results.monthlyRetirementIncome >= inputs.monthlyExpenses && (
-                    <li className="text-green-700">
-                      • Your projected income covers your expected expenses!
-                    </li>
-                  )}
-                </ul>
-              </div>
             </>
           )}
+
+          {/* Equity Preview */}
+          {formData.currentValue > 0 && (
+            <div className="bg-signal-violet/20 rounded-lg p-3 border border-signal-violet/30">
+              <div className="text-sm text-purple-300">
+                Estimated Equity: <span className="font-bold text-white">
+                  {formatCurrency(Math.max(0, formData.currentValue - formData.remainingMortgage))}
+                    </span>
+                  </div>
+                  </div>
+          )}
+                </div>
+
+        <div className="p-6 border-t border-gunmetal flex gap-4">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-3 bg-gunmetal hover:bg-gunmetal/80 text-white rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!formData.address.trim()}
+            className="flex-1 px-4 py-3 bg-signal-violet hover:bg-signal-violet/80 disabled:bg-gunmetal disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
+          >
+            Add Property
+          </button>
+              </div>
+      </div>
+    </div>
+  )
+}
+
+// Stock Modal Component
+function StockModal({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void
+  onSave: (stock: Omit<StockHolding, 'id' | 'totalValue'>) => void
+}) {
+  const [formData, setFormData] = useState({
+    ticker: '',
+    shares: 0,
+    pricePerShare: 0,
+  })
+
+  const handleSave = () => {
+    if (!formData.ticker.trim() || formData.shares <= 0 || formData.pricePerShare <= 0) return
+    onSave({
+      ticker: formData.ticker.trim().toUpperCase(),
+      shares: formData.shares,
+      pricePerShare: formData.pricePerShare,
+    })
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-abyssal-blue rounded-2xl border border-gunmetal w-full max-w-md">
+        <div className="p-6 border-b border-gunmetal flex items-center justify-between">
+          <h2 className="text-xl font-bold text-white">📈 Add Stock</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gunmetal rounded-lg transition-colors">
+            <svg className="w-5 h-5 text-muted-steel" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm text-muted-steel mb-1">Ticker</label>
+            <input
+              type="text"
+              value={formData.ticker}
+              onChange={(e) => setFormData(prev => ({ ...prev, ticker: e.target.value }))}
+              placeholder="AAPL"
+              className="w-full px-4 py-3 bg-gunmetal border border-gray-600 rounded-lg text-white placeholder-muted-steel focus:outline-none focus:ring-2 focus:ring-signal-violet uppercase"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-muted-steel mb-1">Shares</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.shares || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, shares: parseFloat(e.target.value) || 0 }))}
+                className="w-full px-4 py-3 bg-gunmetal border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-signal-violet"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-muted-steel mb-1">Price per Share</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.pricePerShare || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, pricePerShare: parseFloat(e.target.value) || 0 }))}
+                className="w-full px-4 py-3 bg-gunmetal border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-signal-violet"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-gunmetal flex gap-4">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-3 bg-gunmetal hover:bg-gunmetal/80 text-white rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!formData.ticker.trim() || formData.shares <= 0 || formData.pricePerShare <= 0}
+            className="flex-1 px-4 py-3 bg-signal-violet hover:bg-signal-violet/80 disabled:bg-gunmetal disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
+          >
+            Add Stock
+          </button>
         </div>
       </div>
     </div>
   )
 }
 
+// Cash Asset Modal Component
+function CashAssetModal({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void
+  onSave: (asset: Omit<CashAsset, 'id'>) => void
+}) {
+  const [formData, setFormData] = useState({
+    type: 'bank' as CashAsset['type'],
+    description: '',
+    value: 0,
+  })
+
+  const handleSave = () => {
+    if (!formData.description.trim() || formData.value <= 0) return
+    onSave({
+      type: formData.type,
+      description: formData.description.trim(),
+      value: formData.value,
+    })
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-abyssal-blue rounded-2xl border border-gunmetal w-full max-w-md">
+        <div className="p-6 border-b border-gunmetal flex items-center justify-between">
+          <h2 className="text-xl font-bold text-white">💵 Add Cash Asset</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gunmetal rounded-lg transition-colors">
+            <svg className="w-5 h-5 text-muted-steel" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm text-muted-steel mb-1">Asset Type</label>
+            <select
+              value={formData.type}
+              onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as CashAsset['type'] }))}
+              className="w-full px-4 py-3 bg-gunmetal border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-signal-violet"
+            >
+              <option value="bank">Bank</option>
+              <option value="cash">Cash</option>
+              <option value="gold">Gold</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm text-muted-steel mb-1">Description</label>
+            <input
+              type="text"
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="Savings account, money market, etc."
+              className="w-full px-4 py-3 bg-gunmetal border border-gray-600 rounded-lg text-white placeholder-muted-steel focus:outline-none focus:ring-2 focus:ring-signal-violet"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-muted-steel mb-1">Value</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-steel">$</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.value || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, value: parseFloat(e.target.value) || 0 }))}
+                className="w-full pl-7 pr-4 py-3 bg-gunmetal border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-signal-violet"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-gunmetal flex gap-4">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-3 bg-gunmetal hover:bg-gunmetal/80 text-white rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!formData.description.trim() || formData.value <= 0}
+            className="flex-1 px-4 py-3 bg-signal-violet hover:bg-signal-violet/80 disabled:bg-gunmetal disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
+          >
+            Add Asset
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Auth Modal Component
+function AuthModal({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void
+  onSuccess: (email: string, data?: any) => void
+}) {
+  const [mode, setMode] = useState<'login' | 'signup'>('login')
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setIsLoading(true)
+
+    if (mode === 'signup' && !name.trim()) {
+      setError('Please enter your name')
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: mode,
+          name: mode === 'signup' ? name.trim() : undefined,
+          email,
+          password,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (data.success) {
+        onSuccess(data.user?.email || email, data.data)
+      } else {
+        setError(data.error || 'Something went wrong')
+      }
+    } catch {
+      setError('Network error. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-abyssal-blue rounded-2xl border border-gunmetal w-full max-w-md">
+        <div className="p-6 border-b border-gunmetal">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-white">
+              {mode === 'login' ? '👋 Welcome Back' : '🚀 Create Account'}
+            </h2>
+            <button onClick={onClose} className="p-2 hover:bg-gunmetal rounded-lg transition-colors">
+              <svg className="w-5 h-5 text-muted-steel" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <p className="text-sm text-muted-steel mt-2">
+            {mode === 'login' 
+              ? 'Sign in to save and access your retirement plan' 
+                  : 'Create an account to save your progress'}
+                  </p>
+                </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {mode === 'signup' && (
+            <div>
+              <label className="block text-sm text-muted-steel mb-1">Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your name"
+                required={mode === 'signup'}
+                className="w-full px-4 py-3 bg-gunmetal border border-gray-600 rounded-lg text-white placeholder-muted-steel focus:outline-none focus:ring-2 focus:ring-signal-violet"
+                disabled={isLoading}
+              />
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm text-muted-steel mb-1">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+              className="w-full px-4 py-3 bg-gunmetal border border-gray-600 rounded-lg text-white placeholder-muted-steel focus:outline-none focus:ring-2 focus:ring-signal-violet"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-muted-steel mb-1">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              minLength={6}
+              className="w-full px-4 py-3 bg-gunmetal border border-gray-600 rounded-lg text-white placeholder-muted-steel focus:outline-none focus:ring-2 focus:ring-signal-violet"
+            />
+            {mode === 'signup' && (
+              <p className="text-xs text-muted-steel mt-1">Minimum 6 characters</p>
+            )}
+              </div>
+
+          {error && (
+            <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-3">
+              <p className="text-sm text-red-300">{error}</p>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full py-3 bg-signal-violet hover:bg-signal-violet/80 disabled:bg-signal-violet/50 text-white font-semibold rounded-lg transition-colors"
+          >
+            {isLoading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Account'}
+          </button>
+        </form>
+
+        <div className="px-6 pb-6">
+          <p className="text-center text-sm text-muted-steel">
+            {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+            <button
+              onClick={() => {
+                setMode(mode === 'login' ? 'signup' : 'login')
+                setError('')
+              }}
+              className="text-signal-violet hover:text-signal-violet/80"
+            >
+              {mode === 'login' ? 'Sign up' : 'Sign in'}
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
