@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Navigation from '@/components/Navigation'
 
 // Auth types
 interface AuthState {
