@@ -67,6 +67,13 @@ interface CalculatorResults {
   percentOnTrack: number
   gap: number
   monthlyRetirementIncome: number
+  annualIncomeNeeded: number
+  futureAnnualIncome: number
+  futureMonthlyIncome: number
+  futureValueOfSavings: number
+  futureValueOfContributions: number
+  effectiveMonthlyContribution: number
+  additionalMonthlyNeeded: number
   guidance: string[]
   
   // Property breakdown
@@ -186,6 +193,12 @@ export default function RetirementCalculator() {
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  // Auto prompt auth once when unauthenticated
+  useEffect(() => {
+    if (!auth.isLoading && !auth.isLoggedIn) {
+      setShowAuthModal(true)
+    }
+  }, [auth.isLoading, auth.isLoggedIn])
 
   // Check auth status on mount
   useEffect(() => {
@@ -323,6 +336,7 @@ export default function RetirementCalculator() {
     // Calculate percentage on track
     const percentOnTrack = (projectedLiquidAssets / totalNeededAtRetirement) * 100
     const gap = Math.max(0, totalNeededAtRetirement - projectedLiquidAssets)
+    const additionalMonthlyNeeded = gap / monthsToRetirement
 
     // Monthly retirement income based on projected savings
     const monthlyRetirementIncome = (projectedLiquidAssets * 0.04) / 12
@@ -330,7 +344,6 @@ export default function RetirementCalculator() {
     // Generate guidance
     const guidance: string[] = []
     if (percentOnTrack < 100) {
-      const additionalMonthlyNeeded = gap / monthsToRetirement / 12
       guidance.push(`Increase monthly contribution by ${formatCurrency(additionalMonthlyNeeded)} to reach your goal`)
       
       if (inputs.annualReturn < 10) {
@@ -354,6 +367,13 @@ export default function RetirementCalculator() {
       percentOnTrack,
       gap,
       monthlyRetirementIncome,
+      annualIncomeNeeded,
+      futureAnnualIncome,
+      futureMonthlyIncome: futureAnnualIncome / 12,
+      futureValueOfSavings,
+      futureValueOfContributions,
+      effectiveMonthlyContribution,
+      additionalMonthlyNeeded: percentOnTrack < 100 ? gap / monthsToRetirement : 0,
       guidance,
       primaryHomeEquity,
       rentalPropertyEquity: rentalEquity,
@@ -385,6 +405,45 @@ export default function RetirementCalculator() {
 
   const completeOnboarding = () => {
     setShowOnboarding(false)
+  }
+
+  // Gate the calculator until signed in
+  if (!auth.isLoading && !auth.isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-[#050b14] text-white">
+        <Navigation />
+        <div className="max-w-3xl mx-auto px-4 py-16 space-y-6 text-center">
+          <div className="bg-gunmetal/40 border border-gunmetal rounded-2xl p-8 shadow-2xl">
+            <p className="text-sm text-signal-violet font-semibold mb-2">Retirement Calculator</p>
+            <h1 className="text-3xl font-bold mb-3">Sign up to save and load your plan</h1>
+            <p className="text-muted-steel mb-6">
+              Create an account to store your goals, assets, and projections securely in Supabase.
+              When you sign back in, we’ll automatically load your saved numbers.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <button
+                onClick={() => setShowAuthModal(true)}
+                className="px-6 py-3 bg-signal-violet hover:bg-signal-violet/80 text-white font-semibold rounded-lg transition-colors"
+              >
+                Sign up / Log in
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Auth Modal */}
+        {showAuthModal && (
+          <AuthModal
+            onClose={() => setShowAuthModal(false)}
+            onSuccess={(email, data) => {
+              setAuth({ isLoggedIn: true, email, isLoading: false })
+              if (data) loadSavedData(data)
+              setShowAuthModal(false)
+            }}
+          />
+        )}
+      </div>
+    )
   }
 
   // Onboarding Flow
@@ -942,10 +1001,57 @@ export default function RetirementCalculator() {
                       results.percentOnTrack >= 100 ? 'text-emerald-300' : 'text-amber-300'
                     }`}>
                       <span>{results.percentOnTrack >= 100 ? '✓' : '→'}</span>
-                      {tip}
-                    </li>
-                  ))}
-                </ul>
+                    {tip}
+                  </li>
+                ))}
+              </ul>
+              </div>
+
+              {/* Calculation Breakdown */}
+              <div className="bg-gunmetal/30 rounded-xl border border-gunmetal p-5 space-y-3">
+                <h3 className="font-semibold text-white flex items-center gap-2">
+                  <span>🧮</span> How these numbers are calculated
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-muted-steel">
+                  <div className="bg-abyssal-blue rounded-lg border border-gunmetal p-3">
+                    <p className="text-white font-semibold">Total needed at retirement</p>
+                    <p className="mt-1">
+                      Your target income is {formatCurrency(onboardingData.desiredMonthlyIncome)} / month today.
+                      Adjusted for {inputs.inflationRate}% inflation over {results.yearsToRetirement} years that becomes
+                      {` ${formatCurrency(results.futureMonthlyIncome)} / month`} (or {formatCurrency(results.futureAnnualIncome)} per year).
+                      Using the 4% rule, you need about {formatCurrency(results.totalNeededAtRetirement)} (25× annual need).
+                    </p>
+                  </div>
+
+                  <div className="bg-abyssal-blue rounded-lg border border-gunmetal p-3">
+                    <p className="text-white font-semibold">Projected at retirement</p>
+                    <p className="mt-1">
+                      Current liquid assets grow to {formatCurrency(results.futureValueOfSavings)}.
+                      Ongoing contributions ({formatCurrency(results.effectiveMonthlyContribution)}/mo incl. rental cashflow)
+                      grow to {formatCurrency(results.futureValueOfContributions)}.
+                      Combined projection: {formatCurrency(results.projectedLiquidAssets)}.
+                    </p>
+                  </div>
+
+                  <div className="bg-abyssal-blue rounded-lg border border-gunmetal p-3">
+                    <p className="text-white font-semibold">Gap to target</p>
+                    <p className="mt-1">
+                      Gap = Needed ({formatCurrency(results.totalNeededAtRetirement)}) – Projected ({formatCurrency(results.projectedLiquidAssets)})
+                      = {formatCurrency(results.gap)}.
+                      Closing this linearly over {results.yearsToRetirement} years is roughly
+                      {` ${formatCurrency(results.additionalMonthlyNeeded)} per month`} (before investment growth).
+                    </p>
+                  </div>
+
+                  <div className="bg-abyssal-blue rounded-lg border border-gunmetal p-3">
+                    <p className="text-white font-semibold">Projected monthly income</p>
+                    <p className="mt-1">
+                      From projected savings, a 4% withdrawal yields
+                      {` ${formatCurrency(results.monthlyRetirementIncome)} per month`} ({formatCurrency(results.projectedLiquidAssets)} × 4% ÷ 12).
+                      Your goal is {formatCurrency(onboardingData.desiredMonthlyIncome)} / month.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {/* Disclaimer */}
